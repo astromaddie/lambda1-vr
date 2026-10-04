@@ -8,8 +8,10 @@
 #                       script looks at the current holder and refuses to install,
 #                       launch or register the title unless it is NAME.
 #   --apk FILE          the frame APK (default: the assembleFrame output)
-#   --data DIR          rsync a Half-Life "valve" folder (your Steam copy) to the
-#                       headset's ~/Documents/Lambda1VR/valve. No lock needed.
+#   --data DIR          only needed when Half-Life isn't installed in Steam on the Frame
+#                       (the app uses that install in place, read only): rsync a Half-Life
+#                       "valve" folder to the headset's ~/Documents/Lambda1VR/valve. A copy
+#                       there shadows Steam's files. No lock needed.
 #   --register-title    make ~/devkit-game/Lambda1VR a persistent Steam library title
 #                       (once). When the title exists every install refreshes its APK.
 #   --no-install        skip adb install
@@ -185,7 +187,22 @@ if ((install)); then
     adb shell appops set "$package" MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1 || true
 fi
 
+# Don't start anything while someone is wearing the headset (an unattended run over their game). SteamVR
+# logs when the headset goes to standby; with nobody in it that happens a few seconds after an app
+# closes. If it doesn't within two minutes, someone is in it.
+headset_not_worn() {
+    [[ -n "${FRAME_SKIP_WORN_CHECK:-}" ]] && return 0
+
+    for ((i = 0; i < 24; i++)); do
+        last="$(ssh_frame 'grep -E "entering standby|leaving standby" ~/.local/share/Steam/logs/vrserver.txt | tail -n 1' 2>/dev/null || true)"
+        [[ -z "$last" || "$last" == *"entering standby"* ]] && return 0
+        sleep 5
+    done
+    return 1
+}
+
 if ((launch)); then
+    headset_not_worn || die "the headset isn't in standby ($last): somebody may be wearing it, not starting the game. Set FRAME_SKIP_WORN_CHECK=1 to override"
     # A running game of ours is restarted; nothing else is touched.
     adb shell am force-stop "$package"
     adb logcat -c
