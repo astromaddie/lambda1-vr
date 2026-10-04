@@ -245,5 +245,11 @@ the ini parser, the BMP writer, the booking check in `deploy.sh`).
 | HUD at `vr_hud_distance` | verified unattended at 1 and 2 m (disparity); not worn |
 | Menu laser along the aim pose, quad layout | not started |
 | Depth layer, motion vectors, foveation | not started |
+| Controller map (HL25 gamepad layout, grips as hands, menu navigation) | built, host table test passes; the buttons ran unattended through `diag_press` on 2026-10-04 and logged the intended actions; not worn |
+| HUD, text and camera-facing sprites kept level when the head rolls (`vr_hud_level`) | HUD verified unattended at roll +-20 (it turned with the world once the sign was fixed: +20.5 / -20.5 deg against +-20); sprites built, not measured; not worn |
+| Menu laser on top of the screen (aim pose ray, beam and dot as layers after the screen) | built, maths host-tested; not run on the device |
+| Half-Life from Steam in place (`XASH3D_RODIR`) | built; not run on the device |
+| `vr_refresh_rate`, `vr_resolution_scale` (default 1.25 = 2160) | built; not run on the device |
+| 120 Hz and 2160 measurement | blocked: the Frame was offline |
 | Comfort set, haptics table, VR settings page | not started |
 | Performance at the Frame's eye size | not started |
