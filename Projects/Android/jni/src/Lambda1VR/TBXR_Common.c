@@ -734,6 +734,9 @@ void ovrFramebuffer_Resolve(ovrFramebuffer* frameBuffer) {
 }
 
 void ovrFramebuffer_Acquire(ovrFramebuffer* frameBuffer) {
+#ifdef L1VR_STEAM_FRAME
+    const double acquireStart = TBXR_GetTimeInMilliSeconds();
+#endif
     // Acquire the swapchain image
     XrSwapchainImageAcquireInfo acquireInfo = {XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO, NULL};
     OXR(xrAcquireSwapchainImage(
@@ -753,6 +756,9 @@ void ovrFramebuffer_Acquire(ovrFramebuffer* frameBuffer) {
                 i,
                 waitInfo.timeout * (1E-9));
     }
+#ifdef L1VR_STEAM_FRAME
+    VrDiag_NoteTiming(VRDIAG_TIME_ACQUIRE, TBXR_GetTimeInMilliSeconds() - acquireStart);
+#endif
 }
 
 void ovrFramebuffer_Release(ovrFramebuffer* frameBuffer) {
@@ -2295,7 +2301,13 @@ void TBXR_FrameSetup()
 	gAppState.FrameState.type = XR_TYPE_FRAME_STATE;
 
 	ALOGV("xrWaitFrame");
+#ifdef L1VR_STEAM_FRAME
+	const double waitStart = TBXR_GetTimeInMilliSeconds();
+#endif
 	OXR(xrWaitFrame(gAppState.Session, NULL, &gAppState.FrameState));
+#ifdef L1VR_STEAM_FRAME
+	VrDiag_NoteTiming(VRDIAG_TIME_WAIT_FRAME, TBXR_GetTimeInMilliSeconds() - waitStart);
+#endif
 
 	// Get the HMD pose, predicted for the middle of the time period during which
 	// the new eye images will be displayed. The number of frames predicted ahead

@@ -22,6 +22,8 @@ typedef struct {
 	int pressCount;
 	float roll;			// synthetic head roll in degrees (tilting the head to the left is positive)
 	int autostart;		// load a map without touching the menus
+	char load[64];		// a save to load instead of starting a map (a load key implies autostart)
+	int exitSeconds;	// leave after this many seconds of rendering, 0 = off
 	char map[64];		// which one (a map set here starts it as well)
 	char cmd[128];		// console commands (; between them) to run once, about 4 s after the map starts
 	int dumpFrame;		// dump both eyes on this rendered frame, 0 = off

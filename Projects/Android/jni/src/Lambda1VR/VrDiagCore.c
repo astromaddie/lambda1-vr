@@ -162,6 +162,15 @@ int VrDiagCore_Parse(const char* text, vrDiagConfig_t* config)
 		{
 			config->autostart = number != 0;
 		}
+		else if (strcasecmp(key, "load") == 0 && *value != '\0')
+		{
+			snprintf(config->load, sizeof(config->load), "%s", value);
+			config->autostart = 1;
+		}
+		else if (strcasecmp(key, "exit_seconds") == 0 && parseInt(value, &number))
+		{
+			config->exitSeconds = number > 0 ? number : 0;
+		}
 		else if (strcasecmp(key, "map") == 0 && *value != '\0')
 		{
 			snprintf(config->map, sizeof(config->map), "%s", value);

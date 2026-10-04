@@ -24,4 +24,8 @@ bool VrDiag_SyntheticHand(int hand, ovrTrackedController* controller);
 bool VrDiag_InjectInputs(frameRaw_t* raw);
 bool VrDiag_Injecting(void);
 
+// time spent in the blocking XR calls, for the [vr-perf] split between work and waiting
+enum { VRDIAG_TIME_WAIT_FRAME, VRDIAG_TIME_ACQUIRE };
+void VrDiag_NoteTiming(int what, double ms);
+
 #endif

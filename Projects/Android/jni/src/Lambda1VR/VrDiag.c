@@ -3,6 +3,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <math.h>
+#include <time.h>
 
 #include <common/common.h>
 #include <client/client.h>
@@ -37,8 +38,25 @@ static bool dumpEyeDone[2];
 static double windowStart = 0.0;
 static double lastBegin = 0.0;
 static double cpuSum = 0.0;
+static double waitSum = 0.0, acquireSum = 0.0;	// ms in xrWaitFrame and xrAcquireSwapchainImage (+ its wait)
+static double threadStart = 0.0, threadCpuNow = 0.0;	// the game thread's CPU time
 static long windowFrames = 0;
 static long windowMissed = 0;
+
+void VrDiag_NoteTiming(int what, double ms)
+{
+	if (what == VRDIAG_TIME_WAIT_FRAME)
+		waitSum += ms;
+	else
+		acquireSum += ms;
+}
+
+static double threadCpuMs(void)
+{
+	struct timespec now;
+	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now);
+	return now.tv_sec * 1000.0 + now.tv_nsec / 1e6;
+}
 
 void VrDiag_Init(void)
 {
@@ -465,6 +483,8 @@ void VrDiag_FrameBegin(void)
 	}
 
 	const double now = TBXR_GetTimeInMilliSeconds();
+	if (threadStart == 0.0)
+		threadStart = threadCpuMs();
 	frames++;
 	if (TBXR_ShouldRender())
 	{
@@ -490,9 +510,16 @@ void VrDiag_FrameBegin(void)
 	if (config.perf && (now - windowStart) >= 10000.0)
 	{
 		const double seconds = (now - windowStart) / 1000.0;
-		ALOGI("[vr-perf] fps=%.1f missed=%ld cpu_ms=%.2f period_ms=%.2f frames=%ld rendered=%ld game=%s",
-			  windowFrames / seconds, windowMissed, windowFrames ? cpuSum / windowFrames : 0.0,
-			  gAppState.FrameState.predictedDisplayPeriod / 1e6, frames, renderedFrames, connectionName());
+		// the thread's own CPU time over the window, against the wall time: what's left is waiting
+		const double threadMs = threadCpuMs();
+		const double cpuPerFrame = windowFrames ? (threadMs - threadStart) / windowFrames : 0.0;
+		ALOGI("[vr-perf] fps=%.1f missed=%ld cpu_ms=%.2f thread_cpu_ms=%.2f wait_ms=%.2f acquire_ms=%.2f period_ms=%.2f frames=%ld rendered=%ld size=%d game=%s",
+			  windowFrames / seconds, windowMissed, windowFrames ? cpuSum / windowFrames : 0.0, cpuPerFrame,
+			  windowFrames ? waitSum / windowFrames : 0.0, windowFrames ? acquireSum / windowFrames : 0.0,
+			  gAppState.FrameState.predictedDisplayPeriod / 1e6, frames, renderedFrames,
+			  gAppState.Renderer.FrameBuffer[0].Width, connectionName());
+		threadStart = threadMs;
+		waitSum = acquireSum = 0.0;
 		windowStart = now;
 		windowFrames = 0;
 		windowMissed = 0;
@@ -503,7 +530,10 @@ void VrDiag_FrameBegin(void)
 	if (config.autostart && !mapStarted && renderedFrames >= 150)
 	{
 		char command[96];
-		snprintf(command, sizeof(command), "map %s\n", config.map[0] ? config.map : "c1a0");
+		if (config.load[0])
+			snprintf(command, sizeof(command), "load %s\n", config.load);
+		else
+			snprintf(command, sizeof(command), "map %s\n", config.map[0] ? config.map : "c1a0");
 		Cbuf_AddText(command);
 		mapStarted = true;
 		mapStartFrame = renderedFrames;
@@ -518,6 +548,16 @@ void VrDiag_FrameBegin(void)
 		Cbuf_AddText(command);
 		cmdDone = true;
 		ALOGI("[vr-diag] cmd: %s", config.cmd);
+	}
+
+	static double firstFrameMs = 0.0;
+	if (firstFrameMs == 0.0)
+		firstFrameMs = now;
+	if (config.exitSeconds > 0 && (now - firstFrameMs) >= config.exitSeconds * 1000.0)
+	{
+		ALOGI("[vr-diag] exit_seconds %d reached, shutting down", config.exitSeconds);
+		config.exitSeconds = 0;
+		TBXR_exit(0);
 	}
 
 	if (config.exitAfter > 0 && frames >= config.exitAfter)
