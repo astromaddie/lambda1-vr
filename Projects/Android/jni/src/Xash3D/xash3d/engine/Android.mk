@@ -186,6 +186,15 @@ LOCAL_SRC_FILES := \
            platform/android/android_nosdl.c \
            platform/android/dlsym-weak.cpp
 
+# test switches for the Frame build, off unless vr-diag.ini is in the data folder
+ifeq ($(L1VR_STEAM_FRAME),1)
+LAMBDA1VR_SRC_FILES += \
+		   $(LOCAL_PATH)/../../../Lambda1VR/VrDiag.c \
+		   $(LOCAL_PATH)/../../../Lambda1VR/VrDiagCore.c
+LOCAL_SRC_FILES += $(LOCAL_PATH)/../../../Lambda1VR/VrDiag.c \
+		   $(LOCAL_PATH)/../../../Lambda1VR/VrDiagCore.c
+endif
+
 ifeq ($(L1VR_STEAM_FRAME),1)
 LAMBDA1VR_SRC_FILES += $(LOCAL_PATH)/../../../Lambda1VR/VrEyeMath.c \
 		   $(LOCAL_PATH)/../../../Lambda1VR/VrFrameMap.c \

@@ -15,6 +15,7 @@
 #include "VrCommon.h"
 #ifdef L1VR_STEAM_FRAME
 #include "VrEyeMath.h"
+#include "VrDiag.h"
 #endif
 
 #include <common/common.h>
@@ -670,6 +671,9 @@ void * AppThreadFunction( void * parm )
 	
 
 	TBXR_InitialiseOpenXR();
+#ifdef L1VR_STEAM_FRAME
+	VrDiag_Init();
+#endif
 
 	Host_Main(argc, (const char**)argv, "valve", false, NULL);
 
@@ -719,10 +723,12 @@ void * AppThreadFunction( void * parm )
 					lastRate = rate;
 				}
 			}
+			VrDiag_FrameBegin();
 			if (!TBXR_ShouldRender())
 			{
 				//Standby: keep the frame loop going, but the game waits too
 				TBXR_submitFrame();
+				VrDiag_FrameEnd();
 				continue;
 			}
 #endif
@@ -742,7 +748,11 @@ void * AppThreadFunction( void * parm )
 				{
 					TBXR_prepareEyeBuffer(eye);
 
+#ifdef L1VR_STEAM_FRAME
+					if (TBXR_ShouldRender())
+#else
 					if (gAppState.FrameState.shouldRender)
+#endif
 					{
 						if (isScopeEngaged())
 						{
@@ -848,12 +858,18 @@ void * AppThreadFunction( void * parm )
 						GL( glDisable( GL_SCISSOR_TEST ) );
 					}
 
+#ifdef L1VR_STEAM_FRAME
+					VrDiag_AfterEye(eye);
+#endif
 					TBXR_finishEyeBuffer(eye);
 				}
 
 				Host_EndFrame();
 
 				TBXR_submitFrame();
+#ifdef L1VR_STEAM_FRAME
+				VrDiag_FrameEnd();
+#endif
 			}
 		}
 	}

@@ -16,6 +16,7 @@
 #include "VrEyeMath.h"
 #include "VrPointerMath.h"
 #include "VrCvars.h"
+#include "VrDiag.h"
 #endif
 
 #include <EGL/egl.h>
@@ -2208,6 +2209,10 @@ static void TBXR_GetHMDOrientation() {
 #ifdef L1VR_STEAM_FRAME
 	//Keep the last good pose, an untracked one has no usable rotation
 	const XrSpaceLocationFlags poseValid = XR_SPACE_LOCATION_POSITION_VALID_BIT | XR_SPACE_LOCATION_ORIENTATION_VALID_BIT;
+	if (VrDiag_SyntheticHead(&loc.pose))
+	{
+		loc.locationFlags |= poseValid;
+	}
 	if ((loc.locationFlags & poseValid) != poseValid)
 	{
 		return;
@@ -2456,6 +2461,9 @@ void TBXR_updateProjections()
 	const XrViewStateFlags required = XR_VIEW_STATE_POSITION_VALID_BIT |
 									  XR_VIEW_STATE_ORIENTATION_VALID_BIT;
 	if ((viewState.viewStateFlags & required) != required) {
+#ifdef L1VR_STEAM_FRAME
+		if (!VrDiag_SyntheticViews(located))
+#endif
 		return;
 	}
 
@@ -2475,7 +2483,7 @@ void TBXR_updateProjections()
 //isn't showing), and then there's nothing to draw and nothing to simulate
 bool TBXR_ShouldRender()
 {
-	return gAppState.FrameState.shouldRender != XR_FALSE;
+	return gAppState.FrameState.shouldRender != XR_FALSE || VrDiag_ForceRender();
 }
 #endif
 

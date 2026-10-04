@@ -5,6 +5,7 @@
 #ifdef L1VR_STEAM_FRAME
 #include "VrCvars.h"
 #include "VrInputFrame.h"
+#include "VrDiag.h"
 #endif
 
 extern ovrApp gAppState;
@@ -677,6 +678,9 @@ void TBXR_UpdateControllers( )
         gAppState.TrackedController[i].Active = (loc.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) != 0;
         gAppState.TrackedController[i].Pose = loc.pose;
         gAppState.TrackedController[i].Velocity = vel;
+#ifdef L1VR_STEAM_FRAME
+        VrDiag_SyntheticHand(i, &gAppState.TrackedController[i]);
+#endif
     }
 
     leftRemoteTracking_new = gAppState.TrackedController[0];
