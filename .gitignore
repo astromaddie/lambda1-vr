@@ -75,3 +75,6 @@ Projects/Android/build/
 
 # Steam Frame build: Python for the menu tile
 tools/steam_frame/.venv/
+
+# Frame dev: run output from deploy.sh
+scratchpad/

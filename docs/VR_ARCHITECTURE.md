@@ -118,8 +118,12 @@ Log prefixes: `[openxr]` (setup and state), `[vr-diag]` (what was read, autostar
 messages under the tag `Xash` (developer level 3 by default on this build).
 
 Yaw 0 and 90 dumps of `c1a0` (the first corridor): the eyes differ by about the asymmetric-frustum axis offset, 90 turns the head
-to the side wall. The repo's `assets` have no `.mdl` files, so `v_hand`, `v_torch` and the replacement weapons are missing
-(`Mod_ForName ... couldn't load` in the log).
+to the side wall. Those runs predate the release assets below, so they have no hands or weapons.
+
+The repo git-ignores `*.mdl`, `*.wav` and `assets/background`, so a plain build has no `v_hand`, `v_torch` or replacement
+weapons (`Mod_ForName ... couldn't load`). Run `tools/steam_frame/fetch_release_assets.sh` once before `assembleFrame`: it
+takes the missing, ignored files from Team Beef's v1.7.4 release APK (SHA-256 pinned) and leaves tracked files alone. The APK
+is then about 39 MB, like the release.
 
 Host tests: `tools/steam_frame/tests/run_tests.sh` (binding tables against the profiles' component lists, unique action names,
 the ini parser, the BMP writer, the booking check in `deploy.sh`).
