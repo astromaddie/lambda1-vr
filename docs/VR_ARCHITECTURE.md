@@ -132,7 +132,9 @@ the ini parser, the BMP writer, the booking check in `deploy.sh`).
 
 | Area | State |
 | --- | --- |
-| Gradle `frame` build, APK content, manifest | built, not run |
+| Gradle `frame` build, APK content, manifest | verified unattended: installs over adb and as the Steam devkit title `Lambda1VR` (shortcut appid 4086534518) |
+| Steam title launch | verified unattended (2026-10-04): session SYNCHRONIZED, Frame/Index/Touch suggestions `XR_SUCCESS`, main menu at 72 fps, exit_after clean, Steam logs "Game process removed" |
+| Release assets (hands, replacement weapons, sounds) | verified unattended: `v_hand` loads and the parked hands show in the eye dumps. `barney_vest`/`barney_helmet` and `sprites/scope` are still missing (upstream gaps too) |
 | Khronos loader finds SteamVR | verified unattended (SteamVR/OpenXR 2.17.10) |
 | Instance, session, swapchains, frame loop | verified unattended: 72 fps, 1728x1728, session SYNCHRONIZED |
 | Standby handling | built, not run (force_render hides it); exit_after: verified unattended, clean |
