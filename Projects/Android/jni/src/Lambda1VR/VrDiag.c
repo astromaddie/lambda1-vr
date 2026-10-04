@@ -9,8 +9,10 @@
 
 #include "VrDiag.h"
 #include "VrDiagCore.h"
+#include "VrEyeMath.h"
 #include "VrCommon.h"
 
+extern convar_t *vr_worldscale;
 extern ovrApp gAppState;
 extern float snapTurn;
 void TBXR_exit(int exitCode);
@@ -25,6 +27,8 @@ static bool enabled = false;
 static long frames = 0;			// XR frames since the loop started
 static long renderedFrames = 0;	// the ones the game was drawn for
 static bool mapStarted = false;
+static long mapStartFrame = 0;
+static bool cmdDone = false;
 static bool dumpDone = false;
 static bool dumpEyeDone[2];
 
@@ -56,9 +60,9 @@ void VrDiag_Init(void)
 	}
 
 	enabled = true;
-	ALOGI("[vr-diag] %s: force_render=%d diag_yaw=%.1f autostart=%d map=%s dump_frame=%d exit_after=%d perf=%d probe=%d oneshot=%d",
+	ALOGI("[vr-diag] %s: force_render=%d diag_yaw=%.1f autostart=%d map=%s dump_frame=%d exit_after=%d perf=%d probe=%d oneshot=%d cmd=%s",
 		  DIAG_FILE, config.forceRender, config.yaw, config.autostart, config.map[0] ? config.map : "-",
-		  config.dumpFrame, config.exitAfter, config.perf, config.probe, config.oneshot);
+		  config.dumpFrame, config.exitAfter, config.perf, config.probe, config.oneshot, config.cmd[0] ? config.cmd : "-");
 
 	if (config.oneshot)
 	{
@@ -152,6 +156,80 @@ static const char* connectionName(void)
 	}
 }
 
+// Ground truth for the stereo check: rays from the left eye through a grid of pixels, traced
+// into the world, so each gets the depth along the view axis and the disparity a correct
+// stereo pair should show there (the eye separation times the focal length over the depth).
+static void dumpDepthProbes(FILE* file)
+{
+	if (gAppState.Projections == NULL || cls.state != ca_active)
+	{
+		return;
+	}
+
+	const XrView* v0 = &gAppState.Projections[0];
+	const XrView* v1 = &gAppState.Projections[1];
+	const int width = gAppState.Renderer.FrameBuffer[0].Width;
+	const int height = gAppState.Renderer.FrameBuffer[0].Height;
+	const float fx = VrEye_FocalPixels(v0->fov.angleLeft, v0->fov.angleRight, width);
+	const float fy = (float)height / (tanf(v0->fov.angleUp) - tanf(v0->fov.angleDown));
+	const float axisX = VrEye_AxisPixel(v0->fov.angleLeft, v0->fov.angleRight, width);
+	const float axisY = tanf(v0->fov.angleUp) / (tanf(v0->fov.angleUp) - tanf(v0->fov.angleDown)) * (float)height;
+	const float ipd = v1->pose.position.x - v0->pose.position.x;
+
+	vec3_t forward, right, up;
+	AngleVectors(cl.refdef.viewangles, forward, right, up);
+
+	// the left eye: the middle of the head, moved by the eye's offset in the head's frame
+	const float position[3] = {v0->pose.position.x, v0->pose.position.y, v0->pose.position.z};
+	float offset[3];
+	VrEye_ToEngineOffset(position, vr_worldscale->value, offset);
+	vec3_t eye;
+	for (int i = 0; i < 3; i++)
+	{
+		eye[i] = cl.refdef.vieworg[i] + forward[i] * offset[0] - right[i] * offset[1] + up[i] * offset[2];
+	}
+
+	fprintf(file, "probe_setup units_per_m %.2f ipd_m %.5f focal_px %.2f axis_px %.2f %.2f eye0_world %.2f %.2f %.2f view_angles %.2f %.2f %.2f\n",
+			vr_worldscale->value, ipd, fx, axisX, axisY, eye[0], eye[1], eye[2],
+			cl.refdef.viewangles[0], cl.refdef.viewangles[1], cl.refdef.viewangles[2]);
+
+	for (float fv = 0.20f; fv < 0.97f; fv += 0.08f)
+	{
+		for (float fu = 0.15f; fu < 0.86f; fu += 0.1f)
+		{
+			const float u = fu * width;
+			const float v = fv * height;
+			const float left = -(u - axisX) / fx;	// to the left of the view axis, per unit forward
+			const float upward = (axisY - v) / fy;
+
+			vec3_t dir, end;
+			for (int i = 0; i < 3; i++)
+			{
+				dir[i] = forward[i] - right[i] * left + up[i] * upward;
+				end[i] = eye[i] + dir[i] * 8192.0f;
+			}
+
+			pmtrace_t trace = CL_TraceLine(eye, end, PM_WORLD_ONLY);
+			if (trace.fraction >= 1.0f || trace.allsolid)
+			{
+				continue;
+			}
+			vec3_t hit;
+			for (int i = 0; i < 3; i++)
+			{
+				hit[i] = eye[i] + (end[i] - eye[i]) * trace.fraction;
+			}
+			const float depthUnits = (hit[0] - eye[0]) * forward[0] + (hit[1] - eye[1]) * forward[1] + (hit[2] - eye[2]) * forward[2];
+			const float depthM = depthUnits / vr_worldscale->value;
+			if (depthM < 0.25f)
+			{
+				continue;
+			}
+			fprintf(file, "probe %.0f %.0f depth_m %.3f disparity_px %.2f\n", u, v, depthM, ipd * fx / depthM);
+		}
+	}
+}
+
 static void dumpState(void)
 {
 	char path[256];
@@ -174,8 +252,13 @@ static void dumpState(void)
 		{
 			const XrFovf* fov = &gAppState.Projections[eye].fov;
 			fprintf(file, "fov_eye%d L %.3f R %.3f U %.3f D %.3f\n", eye, fov->angleLeft, fov->angleRight, fov->angleUp, fov->angleDown);
+			const XrPosef* pose = &gAppState.Projections[eye].pose;
+			fprintf(file, "eye%d_in_head_mm %.2f %.2f %.2f quat %.5f %.5f %.5f %.5f\n", eye, pose->position.x * 1000.0f,
+					pose->position.y * 1000.0f, pose->position.z * 1000.0f, pose->orientation.x, pose->orientation.y,
+					pose->orientation.z, pose->orientation.w);
 		}
 	}
+	dumpDepthProbes(file);
 	fprintf(file, "screen_layer %d\nconnection %s\nkey_dest %d\nmaxclients %d\n", VR_UseScreenLayer() ? 1 : 0,
 			connectionName(), (int)cls.key_dest, (int)cl.maxclients);
 	fclose(file);
@@ -343,7 +426,18 @@ void VrDiag_FrameBegin(void)
 		snprintf(command, sizeof(command), "map %s\n", config.map[0] ? config.map : "c1a0");
 		Cbuf_AddText(command);
 		mapStarted = true;
+		mapStartFrame = renderedFrames;
 		ALOGI("[vr-diag] autostart: %s", command);
+	}
+
+	// console commands once the map is up (cheats, a cvar, a give)
+	if (config.cmd[0] && !cmdDone && mapStarted && renderedFrames >= mapStartFrame + 300)
+	{
+		char command[sizeof(config.cmd) + 2];
+		snprintf(command, sizeof(command), "%s\n", config.cmd);
+		Cbuf_AddText(command);
+		cmdDone = true;
+		ALOGI("[vr-diag] cmd: %s", config.cmd);
 	}
 
 	if (config.exitAfter > 0 && frames >= config.exitAfter)

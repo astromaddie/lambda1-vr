@@ -30,9 +30,11 @@ int main(void)
 		"exit_after=1800\n"
 		"perf = 0\n"
 		"probe = 1\n"
+		"cmd = sv_cheats 1; impulse 101\n"
 		"oneshot = true\n";
-	CHECK(VrDiagCore_Parse(text, &c) == 8);
+	CHECK(VrDiagCore_Parse(text, &c) == 9);
 	CHECK(c.probe == 1);
+	CHECK(strcmp(c.cmd, "sv_cheats 1; impulse 101") == 0);
 	CHECK(c.forceRender == 1);
 	CHECK(fabsf(c.yaw - 90.5f) < 0.001f);
 	CHECK(c.autostart == 1 && c.map[0] == '\0');

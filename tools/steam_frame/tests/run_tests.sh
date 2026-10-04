@@ -16,6 +16,10 @@ cc="${CC:-clang}"
 "$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_diag_core.c" "$vr/VrDiagCore.c" -lm -o "$out/test_diag_core"
 "$out/test_diag_core"
 
+# eye offsets, cant, the HUD shift against a projected point, the layer pose
+"$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_eye_math.c" "$vr/VrEyeMath.c" -lm -o "$out/test_eye_math"
+"$out/test_eye_math"
+
 # deploy.sh: syntax, and it must refuse to install or launch without the booking
 bash -n "$root/tools/steam_frame/deploy.sh"
 fake="$out/frame-lock.sh"

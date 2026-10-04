@@ -10,6 +10,7 @@ typedef struct {
 	float yaw;			// synthetic head yaw in degrees (turning left is positive)
 	int autostart;		// load a map without touching the menus
 	char map[64];		// which one (a map set here starts it as well)
+	char cmd[128];		// console commands (; between them) to run once, about 4 s after the map starts
 	int dumpFrame;		// dump both eyes on this rendered frame, 0 = off
 	int exitAfter;		// leave through the normal shutdown after this many frames, 0 = off
 	int perf;			// the [vr-perf] line every 10 s

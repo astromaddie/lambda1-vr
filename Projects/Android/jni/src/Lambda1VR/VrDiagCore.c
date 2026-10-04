@@ -105,6 +105,10 @@ int VrDiagCore_Parse(const char* text, vrDiagConfig_t* config)
 			snprintf(config->map, sizeof(config->map), "%s", value);
 			config->autostart = 1;
 		}
+		else if (strcasecmp(key, "cmd") == 0 && *value != '\0')
+		{
+			snprintf(config->cmd, sizeof(config->cmd), "%s", value);
+		}
 		else if (strcasecmp(key, "dump_frame") == 0 && parseInt(value, &number))
 		{
 			config->dumpFrame = number > 0 ? number : 0;
