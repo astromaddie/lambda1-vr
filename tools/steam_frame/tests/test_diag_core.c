@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "VrDiagCore.h"
+#include "VrFrameMap.h"
 
 static int failures = 0;
 #define CHECK(cond) do { if (!(cond)) { printf("FAIL line %d: %s\n", __LINE__, #cond); failures++; } } while (0)
@@ -31,8 +32,16 @@ int main(void)
 		"perf = 0\n"
 		"probe = 1\n"
 		"cmd = sv_cheats 1; impulse 101\n"
+		"diag_roll = -20\n"
+		"diag_gap = 0.8\n"
+		"diag_press = A@300+30, lg@400+20 bogus@1+1 B@5\n"
 		"oneshot = true\n";
-	CHECK(VrDiagCore_Parse(text, &c) == 9);
+	CHECK(VrDiagCore_Parse(text, &c) == 12);
+	CHECK(fabsf(c.gap - 0.8f) < 0.001f);
+	CHECK(c.pressCount == 2);
+	CHECK(c.presses[0].input == FI_A && c.presses[0].start == 300 && c.presses[0].length == 30);
+	CHECK(c.presses[1].input == FI_L_GRIP && c.presses[1].start == 400 && c.presses[1].length == 20);
+	CHECK(fabsf(c.roll + 20.0f) < 0.001f);
 	CHECK(c.probe == 1);
 	CHECK(strcmp(c.cmd, "sv_cheats 1; impulse 101") == 0);
 	CHECK(c.forceRender == 1);

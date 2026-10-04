@@ -5,9 +5,21 @@
 
 #include <stdbool.h>
 
+#define VRDIAG_MAX_PRESSES 24
+
+typedef struct {
+	int input;			// FI_* of VrFrameMap.h
+	int start;			// frames after the map has started
+	int length;			// frames held
+} vrDiagPress_t;
+
 typedef struct {
 	int forceRender;	// draw and run the game while the runtime says shouldRender=false
 	float yaw;			// synthetic head yaw in degrees (turning left is positive)
+	float gap;			// metres between the synthetic hands (they're parked either side of the chest)
+	vrDiagPress_t presses[VRDIAG_MAX_PRESSES];	// buttons to hold down for a while
+	int pressCount;
+	float roll;			// synthetic head roll in degrees (tilting the head to the left is positive)
 	int autostart;		// load a map without touching the menus
 	char map[64];		// which one (a map set here starts it as well)
 	char cmd[128];		// console commands (; between them) to run once, about 4 s after the map starts

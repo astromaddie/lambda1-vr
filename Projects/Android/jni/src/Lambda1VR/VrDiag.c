@@ -10,6 +10,7 @@
 #include "VrDiag.h"
 #include "VrDiagCore.h"
 #include "VrEyeMath.h"
+#include "VrFrameMap.h"
 #include "VrCommon.h"
 
 extern convar_t *vr_worldscale;
@@ -60,9 +61,9 @@ void VrDiag_Init(void)
 	}
 
 	enabled = true;
-	ALOGI("[vr-diag] %s: force_render=%d diag_yaw=%.1f autostart=%d map=%s dump_frame=%d exit_after=%d perf=%d probe=%d oneshot=%d cmd=%s",
+	ALOGI("[vr-diag] %s: force_render=%d diag_yaw=%.1f autostart=%d map=%s dump_frame=%d exit_after=%d perf=%d probe=%d oneshot=%d cmd=%s diag_roll=%.1f diag_gap=%.2f presses=%d",
 		  DIAG_FILE, config.forceRender, config.yaw, config.autostart, config.map[0] ? config.map : "-",
-		  config.dumpFrame, config.exitAfter, config.perf, config.probe, config.oneshot, config.cmd[0] ? config.cmd : "-");
+		  config.dumpFrame, config.exitAfter, config.perf, config.probe, config.oneshot, config.cmd[0] ? config.cmd : "-", config.roll, config.gap, config.pressCount);
 
 	if (config.oneshot)
 	{
@@ -74,6 +75,62 @@ void VrDiag_Init(void)
 bool VrDiag_ForceRender(void)
 {
 	return enabled && config.forceRender;
+}
+
+bool VrDiag_Injecting(void)
+{
+	return enabled && config.pressCount > 0;
+}
+
+bool VrDiag_InjectInputs(frameRaw_t* raw)
+{
+	if (!VrDiag_Injecting() || !mapStarted)
+	{
+		return false;
+	}
+
+	bool any = false;
+	for (int i = 0; i < config.pressCount; i++)
+	{
+		const vrDiagPress_t* press = &config.presses[i];
+		const long first = mapStartFrame + press->start;
+		if (renderedFrames < first || renderedFrames >= first + press->length)
+		{
+			continue;
+		}
+		any = true;
+		switch (press->input)
+		{
+			case FI_L_TRIGGER: raw->triggerLeft = 1.0f; break;
+			case FI_R_TRIGGER: raw->triggerRight = 1.0f; break;
+			case FI_L_GRIP: raw->gripLeft = 1.0f; break;
+			case FI_R_GRIP: raw->gripRight = 1.0f; break;
+			case FI_L_BUMPER: raw->bumperLeft = true; break;
+			case FI_R_BUMPER: raw->bumperRight = true; break;
+			case FI_L_STICK_CLICK: raw->stickClickLeft = true; break;
+			case FI_R_STICK_CLICK: raw->stickClickRight = true; break;
+			case FI_A: raw->a = true; break;
+			case FI_B: raw->b = true; break;
+			case FI_X: raw->x = true; break;
+			case FI_Y: raw->y = true; break;
+			case FI_MENU_SHORT: case FI_MENU_HOLD: raw->menu = true; break;
+			case FI_VIEW_SHORT: case FI_VIEW_HOLD_1S: case FI_VIEW_HOLD_3S: raw->view = true; break;
+			case FI_DPAD_UP: raw->dpadUp = true; break;
+			case FI_DPAD_DOWN: raw->dpadDown = true; break;
+			case FI_DPAD_LEFT: raw->dpadLeft = true; break;
+			case FI_DPAD_RIGHT: raw->dpadRight = true; break;
+			case FI_L_STICK_UP: raw->stickLeftY = 0.9f; break;
+			case FI_L_STICK_DOWN: raw->stickLeftY = -0.9f; break;
+			case FI_L_STICK_LEFT: raw->stickLeftX = -0.9f; break;
+			case FI_L_STICK_RIGHT: raw->stickLeftX = 0.9f; break;
+			case FI_R_STICK_UP: raw->stickRightY = 0.9f; break;
+			case FI_R_STICK_DOWN: raw->stickRightY = -0.9f; break;
+			case FI_R_STICK_LEFT: raw->stickRightX = -0.9f; break;
+			case FI_R_STICK_RIGHT: raw->stickRightX = 0.9f; break;
+			default: break;
+		}
+	}
+	return any;
 }
 
 static XrQuaternionf yawQuat(float degrees)
@@ -89,7 +146,14 @@ bool VrDiag_SyntheticHead(XrPosef* pose)
 		return false;
 	}
 	memset(pose, 0, sizeof(*pose));
-	pose->orientation = yawQuat(config.yaw);
+	// yaw about up, then roll about the view axis (z)
+	const XrQuaternionf y = yawQuat(config.yaw);
+	const float half = DEG2RAD(config.roll) * 0.5f;
+	const XrQuaternionf r = {0.0f, 0.0f, sinf(half), cosf(half)};
+	pose->orientation.x = y.w * r.x + y.x * r.w + y.y * r.z - y.z * r.y;
+	pose->orientation.y = y.w * r.y - y.x * r.z + y.y * r.w + y.z * r.x;
+	pose->orientation.z = y.w * r.z + y.x * r.y - y.y * r.x + y.z * r.w;
+	pose->orientation.w = y.w * r.w - y.x * r.x - y.y * r.y - y.z * r.z;
 	pose->position.y = 1.6f;	// standing height above the floor
 	return true;
 }
@@ -127,7 +191,7 @@ bool VrDiag_SyntheticHand(int hand, ovrTrackedController* controller)
 	}
 
 	// Parked in front of the chest, turned with the head
-	const float side = (hand == 0) ? -0.25f : 0.25f;
+	const float side = (hand == 0) ? -config.gap * 0.5f : config.gap * 0.5f;
 	const float rad = DEG2RAD(config.yaw);
 	const float x = side;
 	const float z = -0.3f;
@@ -245,7 +309,8 @@ static void dumpState(void)
 	fprintf(file, "eye_size %dx%d\n", gAppState.Renderer.FrameBuffer[0].Width, gAppState.Renderer.FrameBuffer[0].Height);
 	fprintf(file, "head_position %.3f %.3f %.3f\n", hmdPosition[0], hmdPosition[1], hmdPosition[2]);
 	fprintf(file, "head_angles pitch %.2f yaw %.2f roll %.2f\n", hmdorientation[PITCH], hmdorientation[YAW], hmdorientation[ROLL]);
-	fprintf(file, "player_yaw %.2f\nsnap_turn %.2f\ndiag_yaw %.2f\nvr_fov_x %d\n", playerYaw, snapTurn, config.yaw, vrFOV);
+	fprintf(file, "player_yaw %.2f\nsnap_turn %.2f\ndiag_yaw %.2f\ndiag_roll %.2f\nview_roll %.2f\nvr_fov_x %d\n", playerYaw, snapTurn,
+			config.yaw, config.roll, cl.refdef.viewangles[ROLL], vrFOV);
 	if (gAppState.Projections != NULL)
 	{
 		for (int eye = 0; eye < ovrMaxNumEyes; eye++)

@@ -181,6 +181,17 @@ void VrInputFrame_Apply(const frameRaw_t* raw)
 	if (isBackpack(offTracking) && !multiplayer) context |= CTX_OFF_ZONE;
 	if (multiplayer) context |= CTX_MULTI;
 
+	// say what was pressed and what the map made of it, once a press, for the log (not the stick directions)
+	static bool wasDown[FI_COUNT];
+	for (int input = 0; input < FI_COUNT; input++) {
+		if (down[input] && !wasDown[input] && input < FI_L_STICK_UP) {
+			ALOGI("[vr] %s -> %s%s%s", VrFrameMap_InputName(input),
+				  VrFrameMap_ActionName(VrFrameMap_Action(input, context, leftHanded)),
+				  menu ? " (menu)" : "", (context & CTX_OFF_ZONE) ? " (hand behind the head)" : "");
+		}
+		wasDown[input] = down[input];
+	}
+
 	// what they do: a bit for each action
 	uint32_t actions[2] = {0, 0};
 	uint32_t quickSaveFromMenuHold = 0;

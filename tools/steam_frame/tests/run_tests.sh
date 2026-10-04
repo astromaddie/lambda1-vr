@@ -13,12 +13,16 @@ python3 "$here/check_bindings.py"
 
 # vr-diag.ini parser and the BMP writer
 cc="${CC:-clang}"
-"$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_diag_core.c" "$vr/VrDiagCore.c" -lm -o "$out/test_diag_core"
+"$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_diag_core.c" "$vr/VrDiagCore.c" "$vr/VrFrameMap.c" -lm -o "$out/test_diag_core"
 "$out/test_diag_core"
 
 # eye offsets, cant, the HUD shift against a projected point, the layer pose
 "$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_eye_math.c" "$vr/VrEyeMath.c" -lm -o "$out/test_eye_math"
 "$out/test_eye_math"
+
+# the controller map: no input doing two things, every action reachable, aliases only where listed
+"$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_frame_map.c" "$vr/VrFrameMap.c" -o "$out/test_frame_map"
+"$out/test_frame_map"
 
 # deploy.sh: syntax, and it must refuse to install or launch without the booking
 bash -n "$root/tools/steam_frame/deploy.sh"

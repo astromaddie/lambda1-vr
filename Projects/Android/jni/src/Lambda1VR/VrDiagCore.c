@@ -5,11 +5,53 @@
 #include <strings.h>
 
 #include "VrDiagCore.h"
+#include "VrFrameMap.h"
 
 void VrDiagCore_Defaults(vrDiagConfig_t* config)
 {
 	memset(config, 0, sizeof(*config));
 	config->perf = 1;
+	config->gap = 0.5f;
+}
+
+static const struct { const char* name; int input; } pressNames[] = {
+	{ "LT", FI_L_TRIGGER }, { "RT", FI_R_TRIGGER }, { "LG", FI_L_GRIP }, { "RG", FI_R_GRIP },
+	{ "LB", FI_L_BUMPER }, { "RB", FI_R_BUMPER }, { "LC", FI_L_STICK_CLICK }, { "RC", FI_R_STICK_CLICK },
+	{ "A", FI_A }, { "B", FI_B }, { "X", FI_X }, { "Y", FI_Y },
+	{ "MENU", FI_MENU_SHORT }, { "MENUHOLD", FI_MENU_HOLD }, { "VIEW", FI_VIEW_SHORT },
+	{ "UP", FI_DPAD_UP }, { "DOWN", FI_DPAD_DOWN }, { "LEFT", FI_DPAD_LEFT }, { "RIGHT", FI_DPAD_RIGHT },
+	{ "LSUP", FI_L_STICK_UP }, { "LSDOWN", FI_L_STICK_DOWN }, { "LSLEFT", FI_L_STICK_LEFT }, { "LSRIGHT", FI_L_STICK_RIGHT },
+	{ "RSUP", FI_R_STICK_UP }, { "RSDOWN", FI_R_STICK_DOWN }, { "RSLEFT", FI_R_STICK_LEFT }, { "RSRIGHT", FI_R_STICK_RIGHT },
+};
+
+// "A@300+30, LG@400+20": a button, the frame it goes down at (after the map has started) and for how many
+static void parsePresses(const char* value, vrDiagConfig_t* config)
+{
+	char copy[256];
+	snprintf(copy, sizeof(copy), "%s", value);
+	config->pressCount = 0;
+	char* save = NULL;
+	for (char* item = strtok_r(copy, ", ", &save); item != NULL && config->pressCount < VRDIAG_MAX_PRESSES; item = strtok_r(NULL, ", ", &save))
+	{
+		char* at = strchr(item, '@');
+		char* plus = at ? strchr(at, '+') : NULL;
+		if (at == NULL || plus == NULL)
+			continue;
+		*at = '\0';
+		*plus = '\0';
+		int input = -1;
+		for (size_t i = 0; i < sizeof(pressNames) / sizeof(pressNames[0]); i++)
+			if (strcasecmp(item, pressNames[i].name) == 0)
+				input = pressNames[i].input;
+		const int start = atoi(at + 1);
+		const int length = atoi(plus + 1);
+		if (input < 0 || start < 0 || length <= 0)
+			continue;
+		vrDiagPress_t* press = &config->presses[config->pressCount++];
+		press->input = input;
+		press->start = start;
+		press->length = length;
+	}
 }
 
 static char* trim(char* text)
@@ -95,6 +137,18 @@ int VrDiagCore_Parse(const char* text, vrDiagConfig_t* config)
 		else if (strcasecmp(key, "diag_yaw") == 0 && parseFloat(value, &real))
 		{
 			config->yaw = real;
+		}
+		else if (strcasecmp(key, "diag_roll") == 0 && parseFloat(value, &real))
+		{
+			config->roll = real;
+		}
+		else if (strcasecmp(key, "diag_gap") == 0 && parseFloat(value, &real))
+		{
+			config->gap = real > 0.0f ? real : 0.5f;
+		}
+		else if (strcasecmp(key, "diag_press") == 0 && *value != '\0')
+		{
+			parsePresses(value, config);
 		}
 		else if (strcasecmp(key, "autostart") == 0 && parseInt(value, &number))
 		{

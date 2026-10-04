@@ -649,12 +649,14 @@ static void TBXR_ReadFrameInputs(frameRaw_t* raw)
 static void TBXR_UpdateFrameLayout()
 {
     TBXR_UpdateInteractionProfile();
-    if (!usingFrameProfile) {
+    // (with diag_press the map runs without controllers, to be tested)
+    if (!usingFrameProfile && !VrDiag_Injecting()) {
         return;
     }
 
     frameRaw_t raw;
     TBXR_ReadFrameInputs(&raw);
+    VrDiag_InjectInputs(&raw);
     VrInputFrame_Apply(&raw);
 }
 #endif

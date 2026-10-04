@@ -45,7 +45,8 @@ FRAME_HAND = {"a/click": "right", "b/click": "right", "x/click": "right", "y/cli
 # What the game needs from the Frame profile (the layout in TBXR_UpdateFrameLayout)
 FRAME_NEEDS = ["touchpadAction", "joystickAction", "thumbstickTouchAction", "triggerAction", "GripAction",
                "poseAction", "aimAction", "vibrateAction", "AAction", "BAction", "XAction", "YAction",
-               "backAction", "viewAction", "bumperAction"]
+               "backAction", "viewAction", "bumperAction", "dpadUpAction", "dpadDownAction", "dpadLeftAction",
+               "dpadRightAction"]
 
 
 def main():
