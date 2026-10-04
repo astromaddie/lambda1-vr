@@ -184,9 +184,10 @@ void VrInputFrame_Apply(const frameRaw_t* raw)
 	// say what was pressed and what the map made of it, once a press, for the log (not the stick directions)
 	static bool wasDown[FI_COUNT];
 	for (int input = 0; input < FI_COUNT; input++) {
-		if (down[input] && !wasDown[input] && input < FI_L_STICK_UP) {
+		const int mapped = VrFrameMap_Action(input, context, leftHanded);
+		if (down[input] && !wasDown[input] && mapped != ACT_NONE && mapped != ACT_MOVE && mapped != ACT_TURN) {
 			ALOGI("[vr] %s -> %s%s%s", VrFrameMap_InputName(input),
-				  VrFrameMap_ActionName(VrFrameMap_Action(input, context, leftHanded)),
+				  VrFrameMap_ActionName(mapped),
 				  menu ? " (menu)" : "", (context & CTX_OFF_ZONE) ? " (hand behind the head)" : "");
 		}
 		wasDown[input] = down[input];

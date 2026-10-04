@@ -20,6 +20,10 @@ cc="${CC:-clang}"
 "$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_eye_math.c" "$vr/VrEyeMath.c" -lm -o "$out/test_eye_math"
 "$out/test_eye_math"
 
+# the menu laser: the ray against the screen quad, the beam and dot poses
+"$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_pointer_math.c" "$vr/VrPointerMath.c" -lm -o "$out/test_pointer_math"
+"$out/test_pointer_math"
+
 # the controller map: no input doing two things, every action reachable, aliases only where listed
 "$cc" -std=c11 -Wall -Wextra -Werror -I"$vr" "$here/test_frame_map.c" "$vr/VrFrameMap.c" -o "$out/test_frame_map"
 "$out/test_frame_map"

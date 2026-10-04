@@ -16,6 +16,7 @@ typedef struct {
 typedef struct {
 	int forceRender;	// draw and run the game while the runtime says shouldRender=false
 	float yaw;			// synthetic head yaw in degrees (turning left is positive)
+	float handYaw, handPitch;	// the synthetic hands' aim, turned from the head's (degrees)
 	float gap;			// metres between the synthetic hands (they're parked either side of the chest)
 	vrDiagPress_t presses[VRDIAG_MAX_PRESSES];	// buttons to hold down for a while
 	int pressCount;

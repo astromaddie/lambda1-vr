@@ -142,6 +142,14 @@ int VrDiagCore_Parse(const char* text, vrDiagConfig_t* config)
 		{
 			config->roll = real;
 		}
+		else if (strcasecmp(key, "diag_hand_yaw") == 0 && parseFloat(value, &real))
+		{
+			config->handYaw = real;
+		}
+		else if (strcasecmp(key, "diag_hand_pitch") == 0 && parseFloat(value, &real))
+		{
+			config->handPitch = real;
+		}
 		else if (strcasecmp(key, "diag_gap") == 0 && parseFloat(value, &real))
 		{
 			config->gap = real > 0.0f ? real : 0.5f;

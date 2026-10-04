@@ -197,7 +197,16 @@ bool VrDiag_SyntheticHand(int hand, ovrTrackedController* controller)
 	const float z = -0.3f;
 	controller->Active = GL_TRUE;
 	memset(&controller->Pose, 0, sizeof(controller->Pose));
-	controller->Pose.orientation = yawQuat(config.yaw);
+	{
+		// aimed where the head looks, or turned from it: yaw about up, then pitch about the hand's own x
+		const XrQuaternionf y = yawQuat(config.yaw + config.handYaw);
+		const float half = DEG2RAD(config.handPitch) * 0.5f;
+		const XrQuaternionf p = {sinf(half), 0.0f, 0.0f, cosf(half)};
+		controller->Pose.orientation.x = y.w * p.x + y.x * p.w + y.y * p.z - y.z * p.y;
+		controller->Pose.orientation.y = y.w * p.y - y.x * p.z + y.y * p.w + y.z * p.x;
+		controller->Pose.orientation.z = y.w * p.z + y.x * p.y - y.y * p.x + y.z * p.w;
+		controller->Pose.orientation.w = y.w * p.w - y.x * p.x - y.y * p.y - y.z * p.z;
+	}
 	controller->Pose.position.x = x * cosf(rad) + z * sinf(rad);
 	controller->Pose.position.y = 1.2f;
 	controller->Pose.position.z = -x * sinf(rad) + z * cosf(rad);
@@ -324,6 +333,12 @@ static void dumpState(void)
 		}
 	}
 	dumpDepthProbes(file);
+	{
+		float pu = 0.0f, pv = 0.0f;
+		const bool aimed = TBXR_ScreenPointer(&pu, &pv);
+		fprintf(file, "pointer %s u %.4f v %.4f (the cursor at %.0f, %.0f in the screen image)\n", aimed ? "aimed" : "none", pu, pv,
+				pu * gAppState.Renderer.FrameBuffer[0].Width, pv * gAppState.Renderer.FrameBuffer[0].Height);
+	}
 	fprintf(file, "screen_layer %d\nconnection %s\nkey_dest %d\nmaxclients %d\n", VR_UseScreenLayer() ? 1 : 0,
 			connectionName(), (int)cls.key_dest, (int)cl.maxclients);
 	fclose(file);
