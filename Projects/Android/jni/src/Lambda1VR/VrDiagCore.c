@@ -113,6 +113,10 @@ int VrDiagCore_Parse(const char* text, vrDiagConfig_t* config)
 		{
 			config->exitAfter = number > 0 ? number : 0;
 		}
+		else if (strcasecmp(key, "probe") == 0 && parseInt(value, &number))
+		{
+			config->probe = number != 0;
+		}
 		else if (strcasecmp(key, "perf") == 0 && parseInt(value, &number))
 		{
 			config->perf = number != 0;

@@ -2,7 +2,7 @@
 
 Current state of the Frame build (`assembleFrame`, `L1VR_STEAM_FRAME`). The public
 description is in [STEAM_FRAME_VR.md](STEAM_FRAME_VR.md); this one is for development.
-Nothing here has been run on the headset yet (2026-10-04).
+First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wearing it); nothing has been worn yet.
 
 ## 1. Target and probe facts
 
@@ -19,8 +19,15 @@ Nothing here has been run on the headset yet (2026-10-04).
 | Data | `/sdcard/Documents/Lambda1VR` (the headset's `~/Documents/Lambda1VR`) |
 | Package | `com.drbeef.lambda1vr.frame`, minSdk 30 |
 
-Not probed on a device yet: the extension list, whether Lepton exposes `EXT_multisampled_render_to_texture`,
-the swapchain formats, what gl4es does on Zink, the controller profile answers.
+Measured 2026-10-04 (unattended): SteamVR/OpenXR 2.17.10 offers 48 instance extensions, not `XR_EXT_performance_settings`;
+swapchain formats 0x8c41, 0x8c43 (sRGB8_ALPHA8, used), depth16/24/32F; recommended 1728x1728; the runtime listed 90 Hz but the
+frame period is 13.89 ms (72 Hz); Frame, Index and Touch suggestions all `XR_SUCCESS`; gl4es reports "GLES 2.0 backend", Mesa.
+
+Two things that bit: the plain `gl*` names in `libxash.so` resolve to gl4es (it's first in NEEDED), and gl4es doesn't know
+framebuffers or textures the driver made. So swapchain attachments are set with `eglGetProcAddress` functions, but the
+framebuffers are created and bound through gl4es (it refuses to bind ones it didn't make). A readback from the eye
+framebuffer has to use the driver's `glReadPixels` too. `jVM` was never assigned, which made the quit path fall off the end of
+`AppThreadFunction` (fixed).
 
 ## 2. Frame protocol (as found in `TBXR_Common.c` and `L1VR_SurfaceView.c`)
 
@@ -101,12 +108,18 @@ Set with `tools/steam_frame/deploy.sh --diag KEY=VAL`, removed with `--diag-rese
 | `force_render` | draw and run the game while `shouldRender` is false, synthetic head at 1.6 m, hands parked in front of the chest, FOV and 64 mm eye offsets when the runtime gives none |
 | `diag_yaw` | synthetic head yaw in degrees (turning left is positive); the hands follow |
 | `autostart`, `map` | load a map without the menus after 150 rendered frames (`map` implies `autostart`; default `c1a0`) |
-| `dump_frame` | on rendered frame N: `vr-dumps/vr-eye0.bmp`, `vr-eye1.bmp` (one synchronous readback each) and `vr-state.txt` |
+| `dump_frame` | on rendered frame N: `vr-dumps/vr-eye0.bmp`, `vr-eye1.bmp` (one synchronous readback each, with the driver's GL) and `vr-state.txt` (poses, FOVs, connection state). The log gets the driver's framebuffer bindings, viewport and scissor and the percentage of pixels that aren't black |
+| `probe` | right before the dump, clear each eye to a flat colour (red, blue) instead: tests the readback and the swapchain, not the game |
 | `exit_after` | after N XR frames, leave through the normal shutdown |
-| `perf` | `[vr-perf]` every 10 s, on by default when the file exists: fps, missed frames (period over 1.5x the display period), cpu ms from after the wait to after the submit |
+| `perf` | `[vr-perf]` every 10 s, on by default when the file exists: fps, missed frames (period over 1.5x the display period), cpu ms from after the wait to after the submit, and the connection state (`game=active` once a map runs) |
 | `oneshot` | rename the file to `vr-diag.ini.last` when it has been read |
 
-Log prefixes: `[openxr]` (setup and state), `[vr-diag]` (what was read, autostart, exit), `[vr-dump]`, `[vr-perf]`.
+Log prefixes: `[openxr]` (setup and state), `[vr-diag]` (what was read, autostart, exit), `[vr-dump]`, `[vr-perf]`, and the engine's own
+messages under the tag `Xash` (developer level 3 by default on this build).
+
+Yaw 0 and 90 dumps of `c1a0` (the first corridor): the eyes differ by about the asymmetric-frustum axis offset, 90 turns the head
+to the side wall. The repo's `assets` have no `.mdl` files, so `v_hand`, `v_torch` and the replacement weapons are missing
+(`Mod_ForName ... couldn't load` in the log).
 
 Host tests: `tools/steam_frame/tests/run_tests.sh` (binding tables against the profiles' component lists, unique action names,
 the ini parser, the BMP writer, the booking check in `deploy.sh`).
@@ -116,14 +129,15 @@ the ini parser, the BMP writer, the booking check in `deploy.sh`).
 | Area | State |
 | --- | --- |
 | Gradle `frame` build, APK content, manifest | built, not run |
-| Khronos loader finds SteamVR | not started (needs a device run) |
-| Instance, session, swapchains, frame loop | built, not run |
-| Standby and exit handling | built, not run |
-| Data folder in Documents | built, not run |
-| Bindings: Frame, Index, Touch | built, host-checked against the component lists, not run |
+| Khronos loader finds SteamVR | verified unattended (SteamVR/OpenXR 2.17.10) |
+| Instance, session, swapchains, frame loop | verified unattended: 72 fps, 1728x1728, session SYNCHRONIZED |
+| Standby handling | built, not run (force_render hides it); exit_after: verified unattended, clean |
+| Exit from the SteamVR menu (EXITING) | built, not run |
+| Data folder in Documents | verified unattended (Steam Half-Life loose files, no pak0.pak, load fine) |
+| Bindings: Frame, Index, Touch | suggestions `XR_SUCCESS` unattended; host-checked against the component lists; no input tested |
 | View hold recentre | built, not run |
-| Diagnostics (force render, autostart, dumps, perf, exit_after) | built, parser and BMP host-tested, not run |
-| Stereo parity, eye dumps at yaw 0, 90, 180 | not started |
+| Diagnostics (force render, autostart, dumps, perf, exit_after, probe) | verified unattended |
+| Eye dumps at yaw 0 and 90 | verified unattended (yaw 180 not done); stereo parity test not started |
 | HUD placement (depth offset, quad, legibility) | not started |
 | Menu laser along the aim pose, quad layout | not started |
 | Depth layer, motion vectors, foveation | not started |

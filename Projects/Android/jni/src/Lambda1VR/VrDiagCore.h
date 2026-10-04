@@ -13,6 +13,7 @@ typedef struct {
 	int dumpFrame;		// dump both eyes on this rendered frame, 0 = off
 	int exitAfter;		// leave through the normal shutdown after this many frames, 0 = off
 	int perf;			// the [vr-perf] line every 10 s
+	int probe;			// clear each eye to a colour (red, blue) right before the dump, to test the readback
 	int oneshot;		// rename the file once it has been read
 	int keysSeen;		// how many known keys were in the file
 } vrDiagConfig_t;

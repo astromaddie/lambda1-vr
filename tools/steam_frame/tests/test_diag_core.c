@@ -29,8 +29,10 @@ int main(void)
 		"dump_frame = 600\n"
 		"exit_after=1800\n"
 		"perf = 0\n"
+		"probe = 1\n"
 		"oneshot = true\n";
-	CHECK(VrDiagCore_Parse(text, &c) == 7);
+	CHECK(VrDiagCore_Parse(text, &c) == 8);
+	CHECK(c.probe == 1);
 	CHECK(c.forceRender == 1);
 	CHECK(fabsf(c.yaw - 90.5f) < 0.001f);
 	CHECK(c.autostart == 1 && c.map[0] == '\0');

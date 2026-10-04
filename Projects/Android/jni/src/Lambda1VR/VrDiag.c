@@ -5,6 +5,7 @@
 #include <math.h>
 
 #include <common/common.h>
+#include <client/client.h>
 
 #include "VrDiag.h"
 #include "VrDiagCore.h"
@@ -55,9 +56,9 @@ void VrDiag_Init(void)
 	}
 
 	enabled = true;
-	ALOGI("[vr-diag] %s: force_render=%d diag_yaw=%.1f autostart=%d map=%s dump_frame=%d exit_after=%d perf=%d oneshot=%d",
+	ALOGI("[vr-diag] %s: force_render=%d diag_yaw=%.1f autostart=%d map=%s dump_frame=%d exit_after=%d perf=%d probe=%d oneshot=%d",
 		  DIAG_FILE, config.forceRender, config.yaw, config.autostart, config.map[0] ? config.map : "-",
-		  config.dumpFrame, config.exitAfter, config.perf, config.oneshot);
+		  config.dumpFrame, config.exitAfter, config.perf, config.probe, config.oneshot);
 
 	if (config.oneshot)
 	{
@@ -137,6 +138,20 @@ bool VrDiag_SyntheticHand(int hand, ovrTrackedController* controller)
 	return true;
 }
 
+static const char* connectionName(void)
+{
+	switch (cls.state)
+	{
+		case ca_uninitialized:	return "uninitialized";
+		case ca_disconnected:	return "disconnected";
+		case ca_connecting:		return "connecting";
+		case ca_connected:		return "connected";
+		case ca_active:			return "active";
+		case ca_cinematic:		return "cinematic";
+		default:				return "unknown";
+	}
+}
+
 static void dumpState(void)
 {
 	char path[256];
@@ -161,9 +176,22 @@ static void dumpState(void)
 			fprintf(file, "fov_eye%d L %.3f R %.3f U %.3f D %.3f\n", eye, fov->angleLeft, fov->angleRight, fov->angleUp, fov->angleDown);
 		}
 	}
-	fprintf(file, "screen_layer %d\n", VR_UseScreenLayer() ? 1 : 0);
+	fprintf(file, "screen_layer %d\nconnection %s\nkey_dest %d\nmaxclients %d\n", VR_UseScreenLayer() ? 1 : 0,
+			connectionName(), (int)cls.key_dest, (int)cl.maxclients);
 	fclose(file);
 }
+
+// The driver's GL for the readback: the plain gl* names in this library are gl4es's,
+// which doesn't know the swapchain's framebuffers
+typedef void (GL_APIENTRYP PFN_BindFramebuffer)(GLenum target, GLuint framebuffer);
+typedef void (GL_APIENTRYP PFN_ReadPixels)(GLint x, GLint y, GLsizei width, GLsizei height, GLenum format, GLenum type, void* pixels);
+typedef GLenum (GL_APIENTRYP PFN_GetError)(void);
+typedef void (GL_APIENTRYP PFN_Finish)(void);
+typedef void (GL_APIENTRYP PFN_GetIntegerv)(GLenum pname, GLint* data);
+typedef GLboolean (GL_APIENTRYP PFN_IsEnabled)(GLenum cap);
+typedef void (GL_APIENTRYP PFN_ClearColor)(GLfloat r, GLfloat g, GLfloat b, GLfloat a);
+typedef void (GL_APIENTRYP PFN_Clear)(GLbitfield mask);
+typedef void (GL_APIENTRYP PFN_Disable)(GLenum cap);
 
 // One synchronous readback on the chosen frame, it's a test dump
 void VrDiag_AfterEye(int eye)
@@ -184,20 +212,78 @@ void VrDiag_AfterEye(int eye)
 
 	mkdir(DUMP_DIR, 0777);
 
-	glFinish();
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, frameBuffer->FrameBuffers[frameBuffer->TextureSwapChainIndex]);
-	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-	const GLenum error = glGetError();
-	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	PFN_BindFramebuffer driverBind = (PFN_BindFramebuffer)eglGetProcAddress("glBindFramebuffer");
+	PFN_ReadPixels driverRead = (PFN_ReadPixels)eglGetProcAddress("glReadPixels");
+	PFN_GetError driverError = (PFN_GetError)eglGetProcAddress("glGetError");
+	PFN_Finish driverFinish = (PFN_Finish)eglGetProcAddress("glFinish");
+	if (driverBind == NULL || driverRead == NULL || driverError == NULL || driverFinish == NULL)
+	{
+		free(pixels);
+		dumpDone = true;
+		ALOGE("[vr-dump] the driver's GL functions weren't found");
+		return;
+	}
+
+	glFinish();		// gl4es flushes what it holds back, and finishes
+	const GLenum drawError = driverError();	// whatever the game left behind
+
+	// what the driver thinks the state is after the game drew this eye
+	{
+		PFN_GetIntegerv getInt = (PFN_GetIntegerv)eglGetProcAddress("glGetIntegerv");
+		PFN_IsEnabled isEnabled = (PFN_IsEnabled)eglGetProcAddress("glIsEnabled");
+		if (getInt != NULL && isEnabled != NULL)
+		{
+			GLint drawFb = -1, readFb = -1, viewport[4] = {0}, scissor[4] = {0};
+			getInt(0x8CA6 /*GL_DRAW_FRAMEBUFFER_BINDING*/, &drawFb);
+			getInt(0x8CAA /*GL_READ_FRAMEBUFFER_BINDING*/, &readFb);
+			getInt(GL_VIEWPORT, viewport);
+			getInt(GL_SCISSOR_BOX, scissor);
+			ALOGI("[vr-dump] eye %d state: draw fb %d, read fb %d, eye fb %u, viewport %d %d %d %d, scissor %s %d %d %d %d, gl error 0x%x",
+				  eye, drawFb, readFb, frameBuffer->FrameBuffers[frameBuffer->TextureSwapChainIndex],
+				  viewport[0], viewport[1], viewport[2], viewport[3], isEnabled(GL_SCISSOR_TEST) ? "on" : "off",
+				  scissor[0], scissor[1], scissor[2], scissor[3], (unsigned int)drawError);
+		}
+	}
+
+	if (config.probe)
+	{
+		// not the game's picture: a flat colour, to see if the readback works at all
+		PFN_ClearColor driverClearColor = (PFN_ClearColor)eglGetProcAddress("glClearColor");
+		PFN_Clear driverClear = (PFN_Clear)eglGetProcAddress("glClear");
+		PFN_Disable driverDisable = (PFN_Disable)eglGetProcAddress("glDisable");
+		if (driverClearColor != NULL && driverClear != NULL && driverDisable != NULL)
+		{
+			driverBind(GL_FRAMEBUFFER, frameBuffer->FrameBuffers[frameBuffer->TextureSwapChainIndex]);
+			driverDisable(GL_SCISSOR_TEST);
+			driverClearColor(eye == 0 ? 1.0f : 0.0f, 0.0f, eye == 0 ? 0.0f : 1.0f, 1.0f);
+			driverClear(GL_COLOR_BUFFER_BIT);
+		}
+	}
+
+	driverError();	// clear
+	driverBind(GL_READ_FRAMEBUFFER, frameBuffer->FrameBuffers[frameBuffer->TextureSwapChainIndex]);
+	driverRead(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+	const GLenum error = driverError();
+	driverBind(GL_READ_FRAMEBUFFER, 0);
+	driverFinish();
+
+	// how much of the picture isn't black, for the log
+	long lit = 0;
+	for (long px = 0; px < (long)width * height; px++)
+	{
+		if (pixels[px * 4] | pixels[px * 4 + 1] | pixels[px * 4 + 2])
+		{
+			lit++;
+		}
+	}
 
 	char path[256];
 	snprintf(path, sizeof(path), DUMP_DIR "/vr-eye%d.bmp", eye);
 	const bool ok = VrDiagCore_WriteBmp(path, pixels, width, height);
 	free(pixels);
 
-	ALOGI("[vr-dump] eye %d at rendered frame %ld: %dx%d, %s, gl error 0x%x", eye, renderedFrames, width, height,
-		  ok ? path : "write failed", (unsigned int)error);
+	ALOGI("[vr-dump] eye %d at rendered frame %ld: %dx%d, %s, gl error 0x%x, %.1f%% not black, game %s", eye, renderedFrames,
+		  width, height, ok ? path : "write failed", (unsigned int)error, 100.0 * lit / ((double)width * height), connectionName());
 
 	dumpEyeDone[eye] = true;
 	if (dumpEyeDone[0] && dumpEyeDone[1])
@@ -241,9 +327,9 @@ void VrDiag_FrameBegin(void)
 	if (config.perf && (now - windowStart) >= 10000.0)
 	{
 		const double seconds = (now - windowStart) / 1000.0;
-		ALOGI("[vr-perf] fps=%.1f missed=%ld cpu_ms=%.2f period_ms=%.2f frames=%ld rendered=%ld",
+		ALOGI("[vr-perf] fps=%.1f missed=%ld cpu_ms=%.2f period_ms=%.2f frames=%ld rendered=%ld game=%s",
 			  windowFrames / seconds, windowMissed, windowFrames ? cpuSum / windowFrames : 0.0,
-			  gAppState.FrameState.predictedDisplayPeriod / 1e6, frames, renderedFrames);
+			  gAppState.FrameState.predictedDisplayPeriod / 1e6, frames, renderedFrames, connectionName());
 		windowStart = now;
 		windowFrames = 0;
 		windowMissed = 0;
