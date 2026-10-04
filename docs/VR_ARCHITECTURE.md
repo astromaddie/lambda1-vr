@@ -46,7 +46,11 @@ One thread (`AppThreadFunction`) owns the EGL context, the OpenXR session and th
      `Host_Frame` (the client frame and the render of that eye), comfort-mask and border clears, release.
    - `Host_EndFrame`, then `xrEndFrame` with a projection layer (both swapchains) or, when
      `VR_UseScreenLayer()`, a 5 x 4.5 m quad layer 4.5 m away that shows eye 0 only.
-4. Both eyes use the head pose as the layer pose and the located FOV; the engine adds the eye separation itself.
+4. Frame build: each eye is drawn from the located eye pose in head space (`VR_GetEyeTransform`, position scaled by
+   `vr_worldscale`, plus the eye's rotation if any) and its projection view is submitted with the head pose placed by
+   that eye pose (`VrEye_ComposePose`), both from the same `xrLocateViews` at the predicted time. Mono scope eyes and the
+   screen layer draw from the middle and submit the head pose. (Quest build: fixed 65 mm times `vr_worldscale`, head pose
+   for both views.)
 5. Exit: `runStatus == 0` leaves the loop: `Host_Shutdown`, `TBXR_LeaveVR`, Java `shutdown()` (`System.exit`).
    The Frame build also sets it on `EXITING`, `LOSS_PENDING` and instance loss.
 
@@ -63,14 +67,14 @@ How the engine draws what isn't plain world geometry, and the rule each one has 
 nothing run. Paths are under `Projects/Android/jni/src` (`E/` = `Xash3D/xash3d/engine`).
 
 Common rules: the eye is `vr_stereo_side`; `R_SetupModelviewMatrix` (`E/client/gl_rmain.c`) shifts by
-`vr_worldscale * VR_IPD / 2` (a fixed 0.065 IPD, not the runtime's eye poses); the projection is the headset's
+`vr_worldscale * VR_IPD / 2` (a fixed 0.065 IPD; the Frame build uses the runtime's eye poses instead); the projection is the headset's
 asymmetric per-eye FOV (`VR_GetVRProjection`); 2D content gets `R_Get2DOffset` (`E/client/gl_draw.c`), the pixel
 shift from the optical axis; `GetStereoDepthOffset` adds +-width/36 per eye for HUD items (two copies, `E/client/cl_scrn.c`
 and the client DLL's `hud.cpp`).
 
 | Category | Where | Rule it uses now | Notes |
 | --- | --- | --- | --- |
-| HUD | `E/client/cl_view.c` `V_PostRender`, `cl_game.c` `CL_DrawHUD`, client DLL | 2D ortho with the axis shift; most elements add the depth offset (crossed disparity, about 0.6 m) | hud_scale 1.3; centerprint, messages, scoreboard and VGUI have no offset (infinity); the offset isn't turned off on the screen layer; the HUD redraws once per eye |
+| HUD | `E/client/cl_view.c` `V_PostRender`, `cl_game.c` `CL_DrawHUD` / `CL_RedrawHUD`, client DLL | Quest: 2D ortho with the axis shift, most elements add the DLL's own width/36 per eye (about 0.4 m on the Frame's lenses). Frame build: the DLL is told the eyes are mono while it draws (no shift), and the whole HUD pass (centre print too) is shifted in `R_Get2DOffset` by `VrEye_HudShiftPixels` for `vr_hud_distance` (default 1 m) | hud_scale 1.3; messages, scoreboard and VGUI draw outside that pass and stay at infinity; scope and the screen layer unchanged; the HUD redraws once per eye |
 | Sprites | `E/client/gl_sprite.c`, `gl_rpart.c`, `gl_beams.c` | oriented with the shared view vectors, positions from the cyclopean `RI.vieworg`; eye shift is in the modelview | fine in stereo; glow sprites test occlusion from the middle eye |
 | Crosshair | `E/client/cl_game.c` `CL_DrawCrosshair` | only in a scope: centre of the 2D space (the optical axis), rotated by hand and head roll, mono | outside a scope the client DLL forces `crosshair 0` |
 | Laser sight | server DLL (`weapons.cpp`, `rpg.cpp`) | a beam entity or a glow spot, both world entities | follows the weapon's aim vector, not the controller ray |
@@ -108,7 +112,8 @@ Set with `tools/steam_frame/deploy.sh --diag KEY=VAL`, removed with `--diag-rese
 | `force_render` | draw and run the game while `shouldRender` is false, synthetic head at 1.6 m, hands parked in front of the chest, FOV and 64 mm eye offsets when the runtime gives none |
 | `diag_yaw` | synthetic head yaw in degrees (turning left is positive); the hands follow |
 | `autostart`, `map` | load a map without the menus after 150 rendered frames (`map` implies `autostart`; default `c1a0`) |
-| `dump_frame` | on rendered frame N: `vr-dumps/vr-eye0.bmp`, `vr-eye1.bmp` (one synchronous readback each, with the driver's GL) and `vr-state.txt` (poses, FOVs, connection state). The log gets the driver's framebuffer bindings, viewport and scissor and the percentage of pixels that aren't black |
+| `dump_frame` | on rendered frame N: `vr-dumps/vr-eye0.bmp`, `vr-eye1.bmp` (one synchronous readback each, with the driver's GL) and `vr-state.txt` (poses, FOVs, each eye's pose in head space, connection state, and 80 `probe` lines: rays from the left eye through a pixel grid traced into the world, with depth and the disparity a correct pair should show; `tools/steam_frame/analyze_stereo.py` matches the right eye there and compares). The log gets the driver's framebuffer bindings, viewport and scissor and the percentage of pixels that aren't black |
+| `cmd` | console commands (`;` between them) about 300 rendered frames after the map starts: `sv_cheats 1; impulse 101` for the suit and weapons, `vr_hud_distance 2`, `vr_hand_model 0` |
 | `probe` | right before the dump, clear each eye to a flat colour (red, blue) instead: tests the readback and the swapchain, not the game |
 | `exit_after` | after N XR frames, leave through the normal shutdown |
 | `perf` | `[vr-perf]` every 10 s, on by default when the file exists: fps, missed frames (period over 1.5x the display period), cpu ms from after the wait to after the submit, and the connection state (`game=active` once a map runs) |
@@ -116,6 +121,14 @@ Set with `tools/steam_frame/deploy.sh --diag KEY=VAL`, removed with `--diag-rese
 
 Log prefixes: `[openxr]` (setup and state), `[vr-diag]` (what was read, autostart, exit), `[vr-dump]`, `[vr-perf]`, and the engine's own
 messages under the tag `Xash` (developer level 3 by default on this build).
+
+Eye geometry measured on the Frame (flags 0x3, valid): eye 0 at (-34.5, 0, 0) mm, eye 1 at (+34.5, 0, 0) mm, rotation 0 yaw / 0 pitch / 0 roll for
+both, so 68.9 mm apart (the headset's IPD setting), fovs L -1.028 R 0.885 U 0.864 D -1.048 and L -0.877 R 1.033 U 0.866 D -1.042 rad. The engine's
+fixed 65 mm was 6% short, and there is no cant. Ground-truth check on the eye images (after the fix): wall 10.2 m away 4.0 px measured against
+4.05 predicted (11 probes within 0.2 px), 58.6 m away 0.1 against 0.7, walls at 2.4 to 4 m within 0.6 px, a floor point at 1.06 m 39.5
+against 38.9 px; floor texture and blurred near floors don't match reliably (spread up to 8 px), which is a limit of the block matching,
+not the render. HUD (`c1a0` with `impulse 101`): 41.0 px at `vr_hud_distance` 1 and 21.0 px at 2 (41.4 and 20.7 expected); the old fixed shift was
+2 x 48 = 96 px, about 0.43 m.
 
 Yaw 0 and 90 dumps of `c1a0` (the first corridor): the eyes differ by about the asymmetric-frustum axis offset, 90 turns the head
 to the side wall. Those runs predate the release assets below, so they have no hands or weapons.
@@ -144,7 +157,8 @@ the ini parser, the BMP writer, the booking check in `deploy.sh`).
 | View hold recentre | built, not run |
 | Diagnostics (force render, autostart, dumps, perf, exit_after, probe) | verified unattended |
 | Eye dumps at yaw 0 and 90 | verified unattended (yaw 180 not done); stereo parity test not started |
-| HUD placement (depth offset, quad, legibility) | not started |
+| Eyes drawn and submitted from the runtime's eye poses | verified unattended (eye images against traced depths); not worn |
+| HUD at `vr_hud_distance` | verified unattended at 1 and 2 m (disparity); not worn |
 | Menu laser along the aim pose, quad layout | not started |
 | Depth layer, motion vectors, foveation | not started |
 | Comfort set, haptics table, VR settings page | not started |
