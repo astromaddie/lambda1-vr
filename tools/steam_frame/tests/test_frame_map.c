@@ -4,7 +4,9 @@
 //   - one physical input doing two different things in the same context;
 //   - an action with two inputs that isn't a documented alias;
 //   - an action that nothing can reach;
-//   - a grip or trigger doing something that isn't a hand's job.
+//   - a grip or trigger doing something that isn't a hand's job;
+//   - the right stick's up or down doing anything in the game (it only turns, and scrolls in a menu);
+//   - a button for the flat screen view (that's the vr_flat_screen setting) or the D-pad crowbar.
 // With --markdown it prints the table for the docs.
 #include <stdio.h>
 #include <string.h>
@@ -20,11 +22,10 @@ static bool aliasAllowed(int action)
 	switch (action)
 	{
 		case ACT_USE:				// X and the weapon hand's grip
-		case ACT_PREV_WEAPON:		// left bumper and D-pad up
-		case ACT_NEXT_WEAPON:		// right bumper and D-pad down
+		case ACT_PREV_WEAPON:		// left bumper and D-pad left
+		case ACT_NEXT_WEAPON:		// right bumper and D-pad right
 		case ACT_FLASHLIGHT:		// right stick click and View
-		case ACT_SCREEN_VIEW:		// right stick up, and View in multiplayer (the scoreboard)
-		case ACT_QUICKSAVE:			// hold Menu; with the hand behind the head right stick click and View
+		case ACT_QUICKSAVE:			// hold Menu; with the hand behind the head the right stick click
 		case ACT_MENU_BACK:			// B, Menu, View
 		case ACT_MENU_UP: case ACT_MENU_DOWN: case ACT_MENU_LEFT: case ACT_MENU_RIGHT:	// D-pad and left stick
 		case ACT_MOVE: case ACT_TURN:	// four stick directions
@@ -124,8 +125,10 @@ int main(int argc, char** argv)
 		{ FI_A, 0, ACT_JUMP }, { FI_B, 0, ACT_CROUCH_HOLD }, { FI_X, 0, ACT_USE }, { FI_Y, 0, ACT_RELOAD },
 		{ FI_L_STICK_CLICK, 0, ACT_CROUCH_TOGGLE }, { FI_R_STICK_CLICK, 0, ACT_FLASHLIGHT },
 		{ FI_L_BUMPER, 0, ACT_PREV_WEAPON }, { FI_R_BUMPER, 0, ACT_NEXT_WEAPON },
-		{ FI_DPAD_UP, 0, ACT_PREV_WEAPON }, { FI_DPAD_DOWN, 0, ACT_NEXT_WEAPON },
-		{ FI_DPAD_RIGHT, 0, ACT_LAST_WEAPON }, { FI_DPAD_LEFT, 0, ACT_CROWBAR },
+		{ FI_DPAD_LEFT, 0, ACT_PREV_WEAPON }, { FI_DPAD_RIGHT, 0, ACT_NEXT_WEAPON },
+		{ FI_DPAD_UP, 0, ACT_LAST_WEAPON }, { FI_DPAD_DOWN, 0, ACT_LASER },
+		{ FI_VIEW_SHORT, CTX_OFF_ZONE, ACT_QUICKLOAD }, { FI_R_STICK_CLICK, CTX_OFF_ZONE, ACT_QUICKSAVE },
+		{ FI_VIEW_SHORT, CTX_MULTI, ACT_SCOREBOARD },
 		{ FI_MENU_SHORT, 0, ACT_PAUSE }, { FI_MENU_HOLD, 0, ACT_QUICKSAVE },
 		{ FI_VIEW_SHORT, 0, ACT_FLASHLIGHT }, { FI_VIEW_HOLD_1S, 0, ACT_RECENTRE }, { FI_VIEW_HOLD_3S, 0, ACT_RECENTRE_HEIGHT },
 		{ FI_R_GRIP, 0, ACT_USE }, { FI_R_GRIP, CTX_DOM_ZONE, ACT_BACKPACK },
@@ -136,6 +139,33 @@ int main(int argc, char** argv)
 	for (size_t i = 0; i < sizeof(expect) / sizeof(expect[0]); i++)
 		if (VrFrameMap_Action(expect[i].input, expect[i].context, false) != expect[i].action)
 			FAIL("%s should be %s (context %d)", VrFrameMap_InputName(expect[i].input), VrFrameMap_ActionName(expect[i].action), expect[i].context);
+
+	// the right stick's up and down are not bound in the game, in any context outside a menu (and the
+	// flat screen view has no action to reach, so no input can do it)
+	for (int hand = 0; hand < 2; hand++)
+		for (int context = 0; context < 32; context++)
+		{
+			if (context & CTX_MENU) continue;
+			if (VrFrameMap_Action(FI_R_STICK_UP, context, hand == 1) != ACT_NONE)
+				FAIL("right stick up does %s in the game (context %d)", VrFrameMap_ActionName(VrFrameMap_Action(FI_R_STICK_UP, context, hand == 1)), context);
+			if (VrFrameMap_Action(FI_R_STICK_DOWN, context, hand == 1) != ACT_NONE)
+				FAIL("right stick down does %s in the game (context %d)", VrFrameMap_ActionName(VrFrameMap_Action(FI_R_STICK_DOWN, context, hand == 1)), context);
+		}
+	for (int r = 0; r < rowCount; r++)
+	{
+		if (rows[r].require & CTX_MENU) continue;
+		if (rows[r].input == FI_R_STICK_UP || rows[r].input == FI_R_STICK_DOWN)
+			FAIL("a game row for the right stick's %s", VrFrameMap_InputName(rows[r].input));
+	}
+	for (int action = 1; action < ACT_COUNT; action++)
+		if (strstr(VrFrameMap_ActionName(action), "screen view") || strcmp(VrFrameMap_ActionName(action), "crowbar") == 0)
+			FAIL("%s is an action again", VrFrameMap_ActionName(action));
+	// right stick up and down still scroll in a menu
+	if (VrFrameMap_Action(FI_R_STICK_UP, CTX_MENU, false) != ACT_MENU_SCROLL_UP || VrFrameMap_Action(FI_R_STICK_DOWN, CTX_MENU, false) != ACT_MENU_SCROLL_DOWN)
+		FAIL("the right stick should still scroll in a menu");
+	// the crowbar is the grip behind the head, as it was
+	if (VrFrameMap_Action(FI_R_GRIP, CTX_DOM_ZONE, false) != ACT_BACKPACK || VrFrameMap_Action(FI_L_GRIP, CTX_DOM_ZONE, true) != ACT_BACKPACK)
+		FAIL("the grip behind the head should be the backpack weapon");
 
 	if (argc > 1 && strcmp(argv[1], "--markdown") == 0)
 	{
