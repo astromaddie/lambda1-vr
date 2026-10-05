@@ -2,7 +2,7 @@
 
 Current state of the Frame build (`assembleFrame`, `L1VR_STEAM_FRAME`). The public
 description is in [STEAM_FRAME_VR.md](STEAM_FRAME_VR.md); this one is for development.
-First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wearing it); nothing has been worn yet. Steam-in-place, menu laser, 120 Hz and resolution runs 2026-10-05 (the 120 Hz ones launched as the Steam title through `~/.steam/steam.pipe`, logs from the journal).
+First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wearing it); first worn run 2026-10-05 (see section 7: smooth 120 fps, "very sharp and very clean"). Steam-in-place, menu laser, 120 Hz and resolution runs 2026-10-05 (the 120 Hz ones launched as the Steam title through `~/.steam/steam.pipe`, logs from the journal).
 
 ## 1. Target and probe facts
 
@@ -255,4 +255,45 @@ the ini parser, the BMP writer, the booking check in `deploy.sh`).
 | `vr_refresh_rate`, `vr_resolution_scale` (default 1.25 = 2160) | `vr_resolution_scale` verified (1728, 2160, 2592, 3024 logged and drawn). `vr_refresh_rate` only picks from what the runtime offers (90 Hz alone), so it asked for 90 while SteamVR ran the title at its per-app 120: the rate comes from SteamVR's per-app setting, and only for the Steam title launch (an adb launch runs at 72) |
 | 120 Hz and 2160 measurement | done unattended 2026-10-05 from the Steam title (standby, force_render, the user's control-room save): 120 fps, 0 missed at 1728 and 2160, 3 runs each, and in c2a5 at 2160 (3 runs), 2592 and 3024 (1 each); frame period 8.33 ms. Adreno 903 MHz 56-61% at 1728, 100% at 2160 and up. Standby: no display scan-out, so the compositor's cost with the headset worn is not in these numbers |
 | Comfort set, haptics table, VR settings page | not started |
-| Performance at the Frame's eye size | unattended numbers above; thread CPU 3.1 ms of 8.33, the rest of `cpu_ms` (7.5) is waits (acquire 2.25 ms, wait 0.65 ms, GPU-fenced calls). Worn frame-time acceptance not done |
+| Performance at the Frame's eye size | unattended numbers above; thread CPU 3.1 ms of 8.33, the rest of `cpu_ms` (7.5) is waits (acquire 2.25 ms, wait 0.65 ms, GPU-fenced calls). Worn (2026-10-05): the user saw a smooth 120 fps with the FPS counter on at 2160 per eye, "very sharp and very clean"; no worn frame-time capture |
+
+## 7. Reference display settings (the build that was worn, 2026-10-05)
+
+The user wore the Steam title at its defaults with the FPS counter on: smooth 120 fps, "very sharp and very clean", "feels really good".
+This is the reference target for the other Frame ports. Everything below is read from the code or the logs; the file and function
+names are the anchor, line numbers are for this commit.
+
+| Setting | Value | Where |
+| --- | --- | --- |
+| Refresh | 120 Hz, from SteamVR's per-app setting (`~/.config/openvr/config/steamvr.vrsettings`: `steam.app.4086534518` `preferredRefreshRate` 120). `XR_FB_display_refresh_rate` offers only that one rate for an app (the logs said 90 on the first run), so the app's request can't raise it. Only a Steam title launch gets it; an adb launch ran at 72 | `TBXR_ChooseRefreshRate` (`TBXR_Common.c`:1537) |
+| App's own request | `vr_refresh_rate` 90 (archived), the highest offered rate not over it, else the lowest. The run asked for 90 and got 120 from SteamVR | `L1VR_SurfaceView.c`:586, `TBXR_Common.c`:1537 |
+| Frame period | 8.33 ms (`predictedDisplayPeriod`); `vr_refresh` (walking scale) is set from it, 120 | `L1VR_SurfaceView.c`:705-714 |
+| Eye image | 2160 x 2160 = 1728 (recommended) x `vr_resolution_scale` 1.25 (archived, clamped 0.5 to 2, and to the view and swapchain maximum, 8192), rounded down to even. Log: `[openxr] eye image: recommended 1728x1728 ... scale 1.25, using 2160x2160` | `TBXR_SetEyeScale` (`TBXR_Common.c`:1504), `L1VR_SurfaceView.c`:587 |
+| Supersampling | none: `SS_MULTIPLIER` is 1.0 on the Frame (1.3 on Quest), only the `-s` command line option changes it, and `TBXR_SetEyeScale` multiplies by it | `TBXR_Common.c`:60-65, `L1VR_SurfaceView.c`:964 |
+| Colour format | `GL_SRGB8_ALPHA8` (0x8c43), the engine draws linear into sRGB images. Offered: 0x8c41, 0x8c43, 0x81a5, 0x81a6, 0x8cac | `ovrRenderer_Create` (`TBXR_Common.c`:820), `TBXR_CheckSwapchainFormats` |
+| Samples | 1 on the swapchain (`sampleCount = 1`) and `NUM_MULTI_SAMPLES = 1`: no MSAA and no `EXT_multisampled_render_to_texture`. The Frame path attaches the swapchain texture and a depth renderbuffer with the driver's own GLES 3 calls (`GenRenderbuffers`, `FramebufferTexture2D`). The engine's `gl_msaa` is 0 | `TBXR_Common.c`:58, 577, 625-660; `vid_common.c`:901; `opengl.cfg` |
+| Swapchain | one per eye, 3 images, 2D (array size 1, face count 1, 1 mip). Log: `swapchain: format 0x8c43, 2160x2160, 3 images, multiview off (one swapchain per eye), 1 samples` | `ovrFramebuffer_Create`, `TBXR_Common.c`:699 |
+| Multiview | not used. `GL_OVR_multiview(2)` is advertised, but `glExtensions.multi_view` is detected and never read, and the engine draws each eye in its own pass | `TBXR_Common.c`:260, 279 |
+| Depth | `GL_DEPTH_COMPONENT24` renderbuffer per swapchain image, no stencil (the engine's `gl_stencilbits` 8 has no effect on the eye FBO), `glInvalidateFramebuffer` on it after each eye so the tiler doesn't write it back. No `XrCompositionLayerDepthInfoKHR` is submitted | `TBXR_Common.c`:638, 731 |
+| Foveation | none. The enum has Quest's `FOVEATION_*` entries and nothing sets them; no `XR_FB_foveation` use on the Frame; the loader log shows Valve's `fdm_injection` XR layer loaded, and I haven't checked what it does for this app | `TBXR_Common.c`:98, 117 |
+| Layers | one projection layer, flags `BLEND_TEXTURE_SOURCE_ALPHA` and `CORRECT_CHROMATIC_ABERRATION`, each view with its own pose and the runtime's asymmetric FOV; quad layers for the menu, laser beam and dot | `TBXR_Common.c`:2757-2758, 2815 (quad layers) |
+| EGL | ES 3 context (`EGL_CONTEXT_CLIENT_VERSION` 3), RGBA8888, no depth, no stencil, 0 samples | `ovrEgl_CreateContext`, `TBXR_Common.c`:416 |
+| gl4es | built with `-DDEFAULT_ES=2`, linked against `libGLESv3.so`: log says `Using GLES 2.0 backend`, "Targeting OpenGL 2.0", full NPOT, FBO in core, `GL_EXT_texture_filter_anisotropic` (max 16), `GL_OES_depth24`, `GL_EXT_color_buffer_float`, sRGB surface supported; Mesa (Zink on Turnip). So the game's GL is gl4es on a GLES 2 backend, in a GLES 3 context, and only the swapchain attachment calls are GLES 3 | `gl4es/Android.mk`:80-84 |
+| Texture filtering | `gl_texturemode GL_LINEAR_MIPMAP_LINEAR` (trilinear), `gl_anisotropy 8` (clamped to the driver's 16), `gl_texture_lodbias 0`, `gl_picmip 0`, `gl_skymip 0`, `gl_round_down 0`, `gl_max_size 512` (legacy, no effect), `gl_compress_textures 0`. Eye framebuffer images are `GL_LINEAR` / clamp to edge | `vid_common.c`:886-901; `TBXR_Common.c`:620-624 |
+| Other renderer defaults that were in effect | `r_vbo 0`, `r_bump 0`, `r_detailtextures 0` (the device's saved config; the code default is 1), `r_dynamic 1`, `r_lighting_modulate 0.6`, `r_lighting_ambient 0.3`, `gl_overbright 0`, `gl_swapInterval 0`, `gl_finish 0`, `gl_allow_mirrors` forced 0 | the device's `valve/config.cfg`, `vid_android.c`:135 |
+| Gamma | `assets/config.cfg` ships `gamma 2.0`, `brightness 0.8` (code default gamma 1.0). The data copy on the Frame had `gamma 2.5` and `fps_max 144`, saved 2026-10-04 21:26, and was read at start of the worn session | `assets/config.cfg`, `valve/config.cfg` on the device |
+| Frame cap | `fps_max 144` in the device's config; the compositor's 120 Hz wait paces the loop (`wait_ms` 0.65, `acquire_ms` 2.25) | `[vr-perf]` |
+
+Measured unattended at this configuration (Steam title launch, standby with `force_render`, `scratchpad/step4/summary.txt`; 3 runs per row,
+`[vr-perf]` every 10 s):
+
+| Eye size | fps (min..avg) | missed | thread CPU | wait | acquire | `cpu_ms` | Adreno at 903 MHz |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1728 | 120.0..120.0 | 0 | 3.08-3.12 ms | 0.64-0.68 | 2.22-2.26 | 7.43-7.49 | 56-61% |
+| 2160 (reference) | 120.0..120.0 | 0 | 3.07-3.11 ms | 0.65-0.66 | 2.24-2.27 | 7.46-7.48 | 100% |
+| 2160, `c2a5` (busier map) | 120.0..120.0 | 0 | 3.14-3.18 ms | 1.60-1.66 | 2.25-2.27 | 6.46-6.53 | 100% |
+| 2592, 3024 (`c2a5`, 1 run each) | 120.0..120.0 | 0 | 3.17, 3.19 ms | 1.65, 1.82 | 2.24, 2.07 | 6.49, 6.30 | 100% |
+
+Thread CPU is about 3.1 ms of the 8.33 ms budget at every size, and the Adreno is at 100% from 2160 up, so what limits the frame is the GPU side,
+not the game thread. The first 10 s window of a run is short of 120 (s125_r1: 107.7 fps, 9 missed, thread CPU 4.06 ms while the map loads) and isn't in the summary. These numbers are from standby: no
+display scan-out, so the compositor's cost with the headset worn isn't in them; the user's report is the worn check.
