@@ -2,7 +2,7 @@
 
 Current state of the Frame build (`assembleFrame`, `L1VR_STEAM_FRAME`). The public
 description is in [STEAM_FRAME_VR.md](STEAM_FRAME_VR.md); this one is for development.
-First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wearing it); nothing has been worn yet.
+First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wearing it); nothing has been worn yet. Steam-in-place, menu laser, 120 Hz and resolution runs 2026-10-05 (the 120 Hz ones launched as the Steam title through `~/.steam/steam.pipe`, logs from the journal).
 
 ## 1. Target and probe facts
 
@@ -12,7 +12,7 @@ First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wea
 | Container | Lepton: Android 11 (API 30), arm64-v8a, GLES 3.2 through Zink on Turnip |
 | Runtime | SteamVR OpenXR 2.17.10 at `/vendor/etc/openxr/1/active_runtime.json`; no loader broker, so the Khronos loader 1.1.63 is in the APK |
 | Recommended eye size | 1728x1728, asymmetric FOV (left eye about L -1.028, R 0.885, U 0.864, D -1.048 rad) |
-| Refresh | the rate set for the app in SteamVR (72 Hz by default); `XR_FB_display_refresh_rate` offers only that |
+| Refresh | the rate set for the app in SteamVR (72 Hz by default; 120 for the Lambda1VR Steam title, `steam.app.4086534518` in steamvr.vrsettings); `XR_FB_display_refresh_rate` offers only 90 and the app can't ask for more. Only a Steam title launch gets the per-app rate |
 | Controllers | `/interaction_profiles/valve/frame_controller_valve` (`XR_VALVE_frame_controller_interaction`) |
 | GL | `GL_OVR_multiview(2)` are advertised, not used: one swapchain per eye, sRGB (`GL_SRGB8_ALPHA8`), plain GLES 3 framebuffers |
 | Game libs | `libxash.so` (engine plus the VR layer), `libgl4es.so` (GL on top of GLES), `libmenu.so`, `libclient*.so`, `libserver*.so` |
@@ -199,6 +199,8 @@ Set with `tools/steam_frame/deploy.sh --diag KEY=VAL`, removed with `--diag-rese
 | `diag_gap` | metres between the synthetic hands (default 0.5), for the two-handed hold (under 0.35) against the grab (over 0.55) |
 | `cmd` | console commands (`;` between them) about 300 rendered frames after the map starts: `sv_cheats 1; impulse 101` for the suit and weapons, `vr_hud_distance 2`, `vr_hand_model 0` |
 | `probe` | right before the dump, clear each eye to a flat colour (red, blue) instead: tests the readback and the swapchain, not the game |
+| `diag_hand_yaw`, `diag_hand_pitch` | turn the synthetic hands' aim from the head's (degrees), to point the menu laser. `vr-state.txt` then has `pointer`, `hand_aim_pose`, `beam_origin`, `beam_end`, `layer_order` and each layer's pose; `tools/steam_frame/composite_menu.py DUMP OUT.png` composites them over the menu image |
+| `load`, `exit_seconds` | `load` = a save name to `load` instead of a map after the start (`save000`); `exit_seconds` = leave through the normal shutdown N seconds after the first frame. `tools/steam_frame/perf_run.sh` uses both |
 | `exit_after` | after N XR frames, leave through the normal shutdown |
 | `perf` | `[vr-perf]` every 10 s, on by default when the file exists: fps, missed frames (period over 1.5x the display period), cpu ms from after the wait to after the submit, and the connection state (`game=active` once a map runs) |
 | `oneshot` | rename the file to `vr-diag.ini.last` when it has been read |
@@ -247,9 +249,10 @@ the ini parser, the BMP writer, the booking check in `deploy.sh`).
 | Depth layer, motion vectors, foveation | not started |
 | Controller map (HL25 gamepad layout, grips as hands, menu navigation) | built, host table test passes; the buttons ran unattended through `diag_press` on 2026-10-04 and logged the intended actions; not worn |
 | HUD, text and camera-facing sprites kept level when the head rolls (`vr_hud_level`) | HUD verified unattended at roll +-20 (it turned with the world once the sign was fixed: +20.5 / -20.5 deg against +-20); sprites built, not measured; not worn |
-| Menu laser on top of the screen (aim pose ray, beam and dot as layers after the screen) | built, maths host-tested; not run on the device |
-| Half-Life from Steam in place (`XASH3D_RODIR`) | built; not run on the device |
-| `vr_refresh_rate`, `vr_resolution_scale` (default 1.25 = 2160) | built; not run on the device |
-| 120 Hz and 2160 measurement | blocked: the Frame was offline |
+| Menu laser on top of the screen (aim pose ray, beam and dot as layers after the screen) | verified unattended (2026-10-05) as far as standby allows: the dump's `vr-state.txt` has the hand's aim pose, the cursor (u 0.4765, v 0.5211 = pixel 1029, 1126, where the engine's own cursor is drawn), the layer order (screen, beam, dot) and each layer's pose; `tools/steam_frame/composite_menu.py` composites them over the eye 0 menu image from the left eye: the beam leaves the hand and ends in the dot on the cursor, both over the panel. That models the compositor, it isn't SteamVR's output (standby captures are black). Not worn |
+| In-game laser sight (`vr_lasersight` 1 and 2) | not seen in four unattended dumps (glock, force_render, hand aimed three ways); the HUD and the weapon draw. Cause not found; needs a look in the headset or a server-side trace |
+| Half-Life from Steam in place (`XASH3D_RODIR`) | verified unattended (2026-10-05): with 4174 byte-identical files moved out of `~/Documents/Lambda1VR/valve`, the log says `[data] game files: Steam, in place`, `fs_path` lists the Steam `valve/` as `rodir` and its wads (halflife.wad 3116 lumps), c1a0, the save and c2a5 load, and the hands and replacement weapons still come from Documents (no `Mod_ForName` errors for them). Reads are direct: Documents and Steam are ext4 bind mounts, not FUSE; SELinux is off in Lepton; no avc or EACCES. Case is handled (`exec MEDIA/STARTUPVIDS.TXT` finds `StartupVids.txt`) |
+| `vr_refresh_rate`, `vr_resolution_scale` (default 1.25 = 2160) | `vr_resolution_scale` verified (1728, 2160, 2592, 3024 logged and drawn). `vr_refresh_rate` only picks from what the runtime offers (90 Hz alone), so it asked for 90 while SteamVR ran the title at its per-app 120: the rate comes from SteamVR's per-app setting, and only for the Steam title launch (an adb launch runs at 72) |
+| 120 Hz and 2160 measurement | done unattended 2026-10-05 from the Steam title (standby, force_render, the user's control-room save): 120 fps, 0 missed at 1728 and 2160, 3 runs each, and in c2a5 at 2160 (3 runs), 2592 and 3024 (1 each); frame period 8.33 ms. Adreno 903 MHz 56-61% at 1728, 100% at 2160 and up. Standby: no display scan-out, so the compositor's cost with the headset worn is not in these numbers |
 | Comfort set, haptics table, VR settings page | not started |
-| Performance at the Frame's eye size | not started |
+| Performance at the Frame's eye size | unattended numbers above; thread CPU 3.1 ms of 8.33, the rest of `cpu_ms` (7.5) is waits (acquire 2.25 ms, wait 0.65 ms, GPU-fenced calls). Worn frame-time acceptance not done |

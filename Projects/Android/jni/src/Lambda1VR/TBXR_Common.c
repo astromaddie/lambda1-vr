@@ -2698,6 +2698,42 @@ static void TBXR_AddPointerLayers()
 			  pointer.onPanel ? "on the panel" : "off the panel", pointer.u, pointer.v);
 	}
 }
+
+// Dev: the layers the menu laser adds, as the compositor gets them (quad layers after the screen, in this
+// order), for the dump's offline composite. Same maths as TBXR_AddPointerLayers.
+void TBXR_DescribePointerLayers(FILE* file)
+{
+	tbxrPointer_t pointer;
+	TBXR_ComputePointer(&pointer);
+	fprintf(file, "layer_order screen beam dot\n");
+	fprintf(file, "layer_screen_pose %.4f %.4f %.4f quat %.5f %.5f %.5f %.5f size %.2f %.2f\n", pointer.quad[0], pointer.quad[1],
+			pointer.quad[2], pointer.quad[3], pointer.quad[4], pointer.quad[5], pointer.quad[6], SCREEN_QUAD_WIDTH, SCREEN_QUAD_HEIGHT);
+	if (!pointer.visible)
+	{
+		fprintf(file, "layer_pointer none\n");
+		return;
+	}
+	const float head[3] = {gAppState.xfStageFromHead.position.x, gAppState.xfStageFromHead.position.y,
+						   gAppState.xfStageFromHead.position.z};
+	const ovrTrackedController* hand = (vr_control_scheme != NULL && vr_control_scheme->integer >= 10) ? &leftRemoteTracking_new : &rightRemoteTracking_new;
+	fprintf(file, "hand_aim_pose %.4f %.4f %.4f quat %.5f %.5f %.5f %.5f\n", hand->Pose.position.x, hand->Pose.position.y,
+			hand->Pose.position.z, hand->Pose.orientation.x, hand->Pose.orientation.y, hand->Pose.orientation.z, hand->Pose.orientation.w);
+	fprintf(file, "beam_origin %.4f %.4f %.4f\nbeam_end %.4f %.4f %.4f\n", pointer.origin[0], pointer.origin[1], pointer.origin[2],
+			pointer.end[0], pointer.end[1], pointer.end[2]);
+	float beamPose[7];
+	const float length = VrPointer_BeamPose(pointer.origin, pointer.end, head, beamPose);
+	fprintf(file, "layer_beam_pose %.4f %.4f %.4f quat %.5f %.5f %.5f %.5f size 0.006 %.4f\n", beamPose[0], beamPose[1], beamPose[2],
+			beamPose[3], beamPose[4], beamPose[5], beamPose[6], length);
+	if (pointer.onPanel)
+	{
+		float dotPose[7];
+		VrPointer_DotPose(pointer.end, pointer.quad, 0.01f, dotPose);
+		fprintf(file, "layer_dot_pose %.4f %.4f %.4f quat %.5f %.5f %.5f %.5f size 0.05 0.05\n", dotPose[0], dotPose[1], dotPose[2],
+				dotPose[3], dotPose[4], dotPose[5], dotPose[6]);
+	}
+	else
+		fprintf(file, "layer_dot none (off the panel)\n");
+}
 #endif
 
 void TBXR_submitFrame()

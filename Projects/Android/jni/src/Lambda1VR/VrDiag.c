@@ -357,6 +357,7 @@ static void dumpState(void)
 		fprintf(file, "pointer %s u %.4f v %.4f (the cursor at %.0f, %.0f in the screen image)\n", aimed ? "aimed" : "none", pu, pv,
 				pu * gAppState.Renderer.FrameBuffer[0].Width, pv * gAppState.Renderer.FrameBuffer[0].Height);
 	}
+	TBXR_DescribePointerLayers(file);
 	fprintf(file, "screen_layer %d\nconnection %s\nkey_dest %d\nmaxclients %d\n", VR_UseScreenLayer() ? 1 : 0,
 			connectionName(), (int)cls.key_dest, (int)cl.maxclients);
 	fclose(file);

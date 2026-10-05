@@ -373,6 +373,9 @@ void TBXR_RecenterToHead(bool resetHeight);
 // when the screen isn't showing or the hand isn't tracked (the ray can also miss the panel's edge).
 bool TBXR_ScreenPointer(float* u, float* v);
 
+// Dev: the pointer layers' poses, one line each, for the dump
+void TBXR_DescribePointerLayers(FILE* file);
+
 // The eye image size from the recommended one times a scale, held to the limits. Before the swapchains are made.
 float TBXR_SetEyeScale(float scale);
 #endif
