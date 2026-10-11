@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "milestone": "PR0",
+  "status": "EXPERIMENTAL",
+  "publication_status": "private preparation; no release published",
+  "audited_commit": "f3773cb04d004a8d51ae095f0fac8c383d6bbafc",
+  "current_checkout_commit": "f3773cb04d004a8d51ae095f0fac8c383d6bbafc",
+  "branch": "frame-dev",
+  "tested_commit": null,
+  "supported_targets": [
+    "Steam Frame / Lepton Android 11 / ARM64 / SteamVR OpenXR / GLES 3.2"
+  ],
+  "validation": {
+    "source_commit": null,
+    "result": "No fresh build or tests were run for the audited source. Existing .DS_Store files were preserved and excluded."
+  },
+  "full_application_build": "not run for current audited source",
+  "distribution_blockers": [
+    "Reachable history includes machine local.properties and assets/extras.pak whose provenance needs review. The shared Android debug key is build material rather than a confirmed private production key. GPLv3 engine terms and Half-Life SDK free-distribution terms need a documented compatibility or permission route."
+  ],
+  "data_boundary": "A user-provided Half-Life installation is required. Half-Life: Source is incompatible.",
+  "changelog": "CHANGELOG.md",
+  "audit_date": "2026-10-11",
+  "audit_details": "docs/PR0_READINESS.md"
+}
