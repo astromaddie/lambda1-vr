@@ -2,7 +2,9 @@
 
 This is my Steam Frame build of [Team Beef's Lambda1VR](https://github.com/Team-Beef-Studios/Lambda1VR), the Xash3D-FWGS and GoldSrc-based Half-Life VR port. It runs in the Frame's Lepton Android container with ARM64, OpenXR and GLES. See the [architecture notes](docs/VR_ARCHITECTURE.md) for the input and rendering details.
 
-**EXPERIMENTAL.** I made this for personal use. This is a source release of my Frame changes to Team Beef's existing port, with the original GPLv3 and component notices kept. See the [build and publication notes](docs/PR0_READINESS.md). The [original README](docs/README_PRE_PR0.md) is preserved.
+**EXPERIMENTAL.** I made this for personal use. My Frame changes build on Team Beef's existing port, with the original GPLv3 and component notices kept. See the [build and publication notes](docs/PR0_READINESS.md). The [original README](docs/README_PRE_PR0.md) is preserved.
+
+**Want to play on Steam Frame?** Download the prebuilt standalone APK from the [v0.1.0 prerelease](https://github.com/astromaddie/lambda1-vr/releases/tag/v0.1.0); no compiler is needed. You still need the full retail Half-Life data from your own copy; Half-Life: Source is not compatible.
 
 The Frame build keeps tracked head and hands, stereo rendering, Steam Frame controller bindings, a laser pointer for menus, snap or smooth turning, and a flat-screen viewing option. I've played it on my Frame and found it smooth, sharp and clean. The in-game laser sight and several upstream assets, including Barney's vest and helmet and the scope sprite, are known gaps.
 
