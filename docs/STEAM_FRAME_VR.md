@@ -1,13 +1,8 @@
 # Lambda1VR on the Valve Steam Frame
 
-This is a build of Lambda1VR for Valve's Steam Frame. The Frame runs Android
-apps in a container called Lepton (Android 11, arm64, GLES 3.2) on top of
-SteamVR's OpenXR runtime. So it's the same Android app, with a few changes to
-get it going there.
+This is a Steam Frame build of Lambda1VR for the Frame's Lepton Android container. It uses ARM64, OpenXR and GLES, with Steam Frame controller bindings and a laser pointer for menus. The game keeps its head-tracked stereo view and adds a flat-screen viewing option.
 
-I've had it on my head now and it feels really good: a smooth 120 fps, sharp and clean. The settings
-it ran with are in "Reference display settings" below. Most of what's in the checks at the end was
-done earlier, unattended with the headset on a desk, and I haven't gone back over that list yet.
+I've played it on my Frame and found it smooth, sharp and clean. The in-game laser sight and several upstream assets remain known gaps. See the [main README](../README.md) for data and project status.
 
 ## Build
 

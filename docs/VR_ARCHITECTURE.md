@@ -1,8 +1,6 @@
 # Lambda1VR on the Steam Frame: how it fits together
 
-Current state of the Frame build (`assembleFrame`, `L1VR_STEAM_FRAME`). The public
-description is in [STEAM_FRAME_VR.md](STEAM_FRAME_VR.md); this one is for development.
-First unattended device runs 2026-10-04 (headset on a desk, over adb, nobody wearing it); first worn run 2026-10-05 (see section 7: smooth 120 fps, "very sharp and very clean"). Steam-in-place, menu laser, 120 Hz and resolution runs 2026-10-05 (the 120 Hz ones launched as the Steam title through `~/.steam/steam.pipe`, logs from the journal).
+This document describes the Frame build (`assembleFrame`, `L1VR_STEAM_FRAME`). The public setup and controls are in [STEAM_FRAME_VR.md](STEAM_FRAME_VR.md); this file maps the rendering, input and Android build changes. Known gameplay and asset gaps are called out where they occur below.
 
 ## 1. Target and probe facts
 
