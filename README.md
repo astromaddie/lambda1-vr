@@ -12,11 +12,27 @@ You need the full retail Half-Life game data from your own copy. The app can rea
 
 ## Build and install
 
-Use JDK 17 and NDK 25.1.8937393. Set `ANDROID_HOME` to your Android SDK directory; machine-specific SDK paths are kept out of Git. From the repository root:
+Build on x86-64 Linux or macOS, or on Windows through WSL2 with an x86-64 Ubuntu distribution. These instructions
+use Bash. On Apple Silicon, install Rosetta for the pinned NDK's x86-64 host tools; Steam Frame is ARM64 and is not
+a host for this Android toolchain.
+
+Clone the public Frame branch and its submodules:
 
 ```sh
+mkdir -p ~/src
+cd ~/src
+git clone --recurse-submodules --branch frame-dev https://github.com/astromaddie/lambda1-vr.git
+cd lambda1-vr
+```
+
+Use JDK 17 and the Android SDK packages listed in the [Steam Frame guide](docs/STEAM_FRAME_VR.md). Before the first
+build, restore the release assets the repository does not track, then build the Frame variant:
+
+```sh
+bash tools/steam_frame/fetch_release_assets.sh
 cd Projects/Android
 sh ./gradlew assembleFrame
 ```
 
-The APK is `Projects/Android/build/outputs/apk/frame/lambda1vr-frame.apk`. The first build downloads and verifies the Khronos OpenXR loader. Launch the registered `Lambda1VR` title from Steam. The [Steam Frame setup guide](docs/STEAM_FRAME_VR.md) covers controls, game data and build assets; the [architecture notes](docs/VR_ARCHITECTURE.md) describe the implementation and open issues; [docs/PR0_READINESS.md](docs/PR0_READINESS.md) records the checks.
+The APK is `Projects/Android/build/outputs/apk/frame/lambda1vr-frame.apk`. Building creates the APK; it does not
+install or launch it. The guide covers the first upload, later updates, and your Half-Life data.

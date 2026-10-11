@@ -2,80 +2,153 @@
 
 This is a Steam Frame build of Lambda1VR for the Frame's Lepton Android container. It uses ARM64, OpenXR and GLES, with Steam Frame controller bindings and a laser pointer for menus. The game keeps its head-tracked stereo view and adds a flat-screen viewing option.
 
-I've played it on my Frame and found it smooth, sharp and clean. The in-game laser sight and several upstream assets remain known gaps. See the [main README](../README.md) for data and project status.
+I've played it on my Frame and found it smooth, sharp and clean. The in-game laser sight and several upstream assets remain known gaps. See the [main README](../README.md) for the game data requirements and port features.
 
-## Build
+## Build the APK
 
-You need JDK 17 and NDK 25.1.8937393, same as the Quest build.
+Build on x86-64 Linux or macOS, or on Windows through WSL2 with an x86-64 Ubuntu distribution. These steps use Bash.
+On Apple Silicon, install Rosetta for the pinned NDK's x86-64 host tools. Steam Frame is ARM64 and is not a host for
+this Android toolchain. Android's [NDK downloads](https://developer.android.com/ndk/downloads) list the available host
+packages.
 
+### Windows with WSL2
+
+Install [WSL 2 and Ubuntu](https://learn.microsoft.com/en-us/windows/wsl/install). From PowerShell run as
+Administrator, install Ubuntu with:
+
+```powershell
+wsl --install -d Ubuntu
 ```
+
+Restart Windows if prompted, open Ubuntu, and create its Linux user. Do the build in Ubuntu, with the checkout and
+Android SDK under Linux `~` (for example `~/src`), not under `/mnt/c`. Install the Linux JDK and tools inside Ubuntu;
+a Windows JDK or Android SDK is not used by the WSL build:
+
+```bash
+sudo apt update
+sudo apt install -y openjdk-17-jdk git curl unzip zip perl python3-venv openssh-client
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export ANDROID_HOME="$HOME/Android/Sdk"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+mkdir -p "$ANDROID_HOME/cmdline-tools/latest" /tmp/android-cmdline-tools
+curl -fL -o /tmp/commandlinetools-linux.zip \
+  https://dl.google.com/android/repository/commandlinetools-linux-15859902_latest.zip
+unzip -q /tmp/commandlinetools-linux.zip -d /tmp/android-cmdline-tools
+mv /tmp/android-cmdline-tools/cmdline-tools/* "$ANDROID_HOME/cmdline-tools/latest/"
+```
+
+The Linux command-line tools archive and `sdkmanager` are documented on Google's [Android Studio downloads](https://developer.android.com/studio)
+and [`sdkmanager` pages](https://developer.android.com/tools/sdkmanager). Keep this Ubuntu terminal open so the
+environment variables remain set.
+
+Clone the public Frame branch and its submodules into the Linux home directory:
+
+```bash
+mkdir -p ~/src && cd ~/src
+git clone --recurse-submodules --branch frame-dev https://github.com/astromaddie/lambda1-vr.git
+cd lambda1-vr
+```
+
+Install JDK 17, Android SDK command-line tools and Git. This branch uses Gradle 8.2.1, Android Gradle Plugin 8.2.1,
+Android SDK platform 32, build-tools 29.0.3 and NDK 25.1.8937393. On Linux/macOS only, set these variables to the
+JDK 17 and Android SDK locations for that host (skip this block if you followed the Windows/WSL setup above):
+
+```bash
+export JAVA_HOME="/path/to/jdk-17"
+export ANDROID_HOME="/path/to/android-sdk"
+export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+```
+
+Accept the Android SDK licenses, then install the pinned packages in the same terminal:
+
+```bash
+sdkmanager --sdk_root="$ANDROID_HOME" --licenses
+sdkmanager --sdk_root="$ANDROID_HOME" \
+  "platform-tools" "platforms;android-32" "build-tools;29.0.3" "ndk;25.1.8937393"
+```
+
+For Linux and macOS, install the command-line tools for that host from Google's [Android Studio downloads](https://developer.android.com/studio)
+page and put their `cmdline-tools` contents under `<android-sdk>/cmdline-tools/latest` before running the setup above.
+
+On Windows through WSL2, clone from Ubuntu into `~/src` and run the build there. A Windows file such as
+`C:\Users\WindowsUser\Documents\valve` appears to WSL as `/mnt/c/Users/WindowsUser/Documents/valve`; replace
+`WindowsUser` with the Windows account name. The Frame game reads Half-Life files from `~/Documents/Lambda1VR/valve`
+on the headset.
+
+The first build needs the release assets that are not stored in Git. From the repository root, make sure `curl`,
+`unzip` and `shasum` are available, then run the checked asset-fetch script and build the Frame variant:
+
+```bash
+bash tools/steam_frame/fetch_release_assets.sh
 cd Projects/Android
 sh ./gradlew assembleFrame
 ```
 
-The APK ends up in `Projects/Android/build/outputs/apk/frame/lambda1vr-frame.apk`.
-It's signed with the debug key.
+The script downloads Team Beef's public v1.7.4 release APK, verifies its SHA-256, and restores missing ignored assets.
+The build also downloads and verifies the Khronos OpenXR loader. Both downloads need an internet connection. The APK
+is `Projects/Android/build/outputs/apk/frame/lambda1vr-frame.apk` and uses the debug key.
 
-The first build downloads the Khronos OpenXR loader (1.1.63) from Maven
-Central, checks its SHA-256 and unpacks it into `Projects/Android/build/`. Nothing
-gets committed. The Quest builds don't touch it.
+Running the checked asset-fetch script before Gradle is required for a source build. The restored files are bundled
+into the APK; on first launch, the app copies `extras.pak` to its private files directory and copies the bundled
+replacement models, sounds and menu images into the Frame's `~/Documents/Lambda1VR` data folder. You do not need to
+copy these release assets to the Frame separately.
 
-### The menu tile
-
-Team Beef's menu background has the Quest's button help baked into one tile, `800_1_a_loading.tga`.
-The Frame build swaps in its own, with the Frame's buttons on it. `assembleFrame` makes it by itself: it
-runs `tools/steam_frame/make_frame_tile.py`, which reads the release tile, takes the old text off and
-draws the new one, and writes the result to `Projects/Android/build/frame-assets`. That folder is only
-added to the Frame build, so Quest and Pico builds are the same as before. Nothing it makes is committed.
-
-It needs two things. The release tile has to be in `assets/background` (git ignores that folder, so
-copy it from Team Beef's v1.7.4 release APK, the `assets/background` folder in it). And it needs Python 3
-with Pillow and numpy:
-
-```
-python3 -m venv tools/steam_frame/.venv
-tools/steam_frame/.venv/bin/pip install pillow numpy
-```
-
-The build uses that venv if it's there, else `python3`. `-PframePython=/path/to/python` or
-`FRAME_PYTHON` picks another. If the tile or the modules are missing, the build still works. It says so
-and the Frame APK gets the release tile, with the Quest help.
+The Frame menu tile is generated when the release background image and Python 3 with Pillow and NumPy are available.
+To install those optional modules, run `python3 -m venv tools/steam_frame/.venv` and
+`tools/steam_frame/.venv/bin/pip install pillow numpy` from the repository root. Without the image or modules, the
+build still completes with the release tile and its Quest button hints.
 
 ## Install and run
 
-Start "Lepton Development" on the Frame and use adb over the network:
+If Steam's Devkit Client is running on Windows, copy the built APK from WSL to a Windows folder so the client can
+browse it. From the repository root in Ubuntu:
 
+```bash
+windows_user="$(cmd.exe /C echo %USERNAME% | tr -d '\r')"
+mkdir -p "/mnt/c/Users/$windows_user/Downloads/Lambda1VR"
+cp Projects/Android/build/outputs/apk/frame/lambda1vr-frame.apk \
+  "/mnt/c/Users/$windows_user/Downloads/Lambda1VR/"
 ```
-adb connect <frame-ip>:5555
-adb install -r lambda1vr-frame.apk
-adb shell am start -n com.drbeef.lambda1vr.frame/com.drbeef.lambda1vr.GLES3JNIActivity
-```
 
-Lepton Development deletes the apps you install when it exits. For something that
-sticks around you can add the APK as a devkit title in Steam on the Frame. The
-game data lives outside the container either way (next section).
+Use Valve's [SteamOS Devkit Client](https://partner.steamgames.com/doc/steamhardware/steamframe/loadgames) from Steam
+on your desktop. Pair it once with the Frame: enable Developer Mode, choose **Settings > Developer > Pair new host**,
+then register the Frame in the client's **Devkits** tab and confirm pairing on the headset.
 
-Launched from adb the app doesn't get controllers or focus from SteamVR, so use
-that for logs. Start it from the Steam library to actually play.
+For a first install, open **Devkits > Connect to devkit by IP**, choose **Title Upload**, and set:
+
+- **Name:** `Lambda1VR`
+- **Local Folder:** The folder containing the APK: the Windows Downloads folder copied above on WSL, or
+  `Projects/Android/build/outputs/apk/frame` on Linux/macOS.
+- **Start Command:** `lambda1vr-frame.apk`
+- **Runtime:** `Android`
+
+Upload and start the title. It then appears in the Frame's Steam library under **Library > Non-Steam > Devkit Game**.
+For later builds, upload again with the same title name to update that library entry. Steam launches provide the
+Frame controller input.
 
 ## Game data
 
-Install Half-Life from Steam on the Frame, and that's it. The Android container shows the headset's
-Steam folders (read only), so the game uses the files where Steam put them, there's nothing to copy. At
-start the app looks for `steamapps/common/Half-Life/valve/liblist.gam` in the Steam library (and in the
-other libraries `libraryfolders.vdf` lists, like one on an SD card) and tells the engine to treat that folder
-as read only (`-rodir`). The expansions (Opposing Force, Blue Shift) are in the same folder on Steam.
+Use the full retail Half-Life game data from your own copy; **Half-Life: Source is not compatible**. The app can read
+Half-Life installed through Steam on the Frame, or a `valve/` folder under `~/Documents/Lambda1VR/valve` on the Frame.
+Saves, settings and the files restored from the v1.7.4 release assets live under `~/Documents/Lambda1VR`.
 
-`~/Documents/Lambda1VR` is the writable side, and it wins when the same file is in both. Inside Lepton it's
-`/sdcard/Documents/Lambda1VR`, the headset's own folder, so it survives a Lepton reset. It holds your saves and
-settings, and the files this app puts there on first start (the replacement weapon models, the sprites, the
-loading screens), like it does on the Quest. The engine also makes empty folders there with the names of the
-game folders in Steam's. On the Quest it's `/sdcard/xash`, that hasn't changed.
+If you do not have Half-Life installed through Steam on the Frame, copy the retail `valve/` folder from your own
+Half-Life installation. Enable Developer Mode and set the SteamOS password using Valve's [Steam Frame setup guide](https://partner.steamgames.com/doc/steamhardware/steamframe/setup).
+Valve's [debugging guide](https://partner.steamgames.com/doc/steamhardware/steamframe/debugging) documents SSH as
+`steamos@frame`. Set `FRAME_HOST` to `frame` or the Frame's IP address; enter the password you set when SSH asks.
+These commands use the host's OpenSSH `ssh` and `scp` clients; install `openssh-client` on Ubuntu (included in the
+WSL setup above).
+For WSL, a `valve/` folder under Windows Documents appears at `/mnt/c/Users/WindowsUser/Documents/valve`; replace
+`WindowsUser` with your Windows account name. From the build computer, run:
 
-If there's no Half-Life in Steam on the headset, it falls back to the old way: copy the `valve` folder from a
-PC's Steam copy to `~/Documents/Lambda1VR/valve`. A copy there is used too when Steam has one as well (it's
-found first, so a stale copy would be used over the Steam files). The log says which one it picked, with a
-`[data]` line.
+```bash
+export FRAME_HOST=frame  # replace with the Frame's IP if its hostname does not resolve
+VALVE_DIR="/mnt/c/Users/WindowsUser/Documents/valve"  # use the local folder path on Linux/macOS
+ssh "steamos@$FRAME_HOST" 'mkdir -p /home/steamos/Documents/Lambda1VR/valve'
+scp -r "$VALVE_DIR"/. "steamos@$FRAME_HOST:/home/steamos/Documents/Lambda1VR/valve/"
+```
+
+If Half-Life is already installed through Steam on the Frame, no game-data copy is needed.
 
 ## Quest and Frame LAN multiplayer
 
@@ -165,22 +238,19 @@ you can turn it off again from there.
 | Left / right bumper | Previous / next tab or page |
 | Right stick up / down | Scroll |
 
-The map is one table, `VrFrameMap.c`, and `tools/steam_frame/tests` in the dev branch checks it for an
-input that does two things in one situation and for actions nothing can reach.
 
 If SteamVR hands the app Index or Touch controllers instead, they bind like they do on Quest (Index has no
 Menu for apps, so pause is the left trackpad pressed hard). The Frame layout only kicks in when the runtime
 says the Frame profile is active.
 
-## Reference display settings
+## Display settings and performance
 
-This is what the build runs at by default, and what I wore when it felt right. I treat it as the
-target for anything else I port to the Frame, so I'm writing it down.
+These are the build defaults and the display settings I prefer on the Frame.
 
 - Refresh is 120 Hz. That comes from SteamVR, from the per-app setting for the game in the headset's
   SteamVR settings. The game's own `vr_refresh_rate` (default 90) only picks from the rates SteamVR
   offers, and it offers just the one set for the app, so the app can't push it higher. It only counts when
-  the game is started from the Steam library. Started from adb it runs at 72.
+  the game is started from the Steam library.
 - Each eye is 2160 x 2160. That's the 1728 SteamVR recommends times `vr_resolution_scale` (1.25), which is
   the panel's own size. There's no extra supersampling on top of that.
 - The eye images are sRGB (`GL_SRGB8_ALPHA8`), one swapchain per eye, three images each. No multiview.
@@ -193,136 +263,7 @@ target for anything else I port to the Frame, so I'm writing it down.
 - The shipped `config.cfg` has `gamma 2.0` and `brightness 0.8`. My own copy on the headset had `gamma 2.5`,
   so that's what I was looking at.
 
-What I measured with it unattended at 120 Hz and 2160 (headset in standby, so there's no scan-out and the
-compositor's cost isn't in it): 120 fps and no missed frames, over six runs on two saves. The frame period is
-8.33 ms. The game thread uses about 3.1 ms of that. The Adreno runs at 903 MHz and is about 60% busy at
-1728, and 100% busy at 2160. Bigger still held 120 on the busy save (2592 and 3024 per eye, one run each),
-but I didn't wear those.
-
-## What's different from the Quest build, and why
-
-- There's a `frame` build type, not a flavour. A flavour would make `assembleDebug`
-  and `assembleRelease` build it as well, and the Quest builds should stay as
-  they are. minSdk is 30 there because Lepton is Android 11 (the Quest build is 32).
-- The manifest overlay (`Projects/Android/src/frame`) drops the headtracking
-  requirement, since the container doesn't have that feature and the install
-  would fail, and the Quest and Pico metadata.
-- Lepton has no OpenXR loader broker, so the APK carries the Khronos loader.
-  Java loads it as `openxr_loader`.
-- Only OpenGL ES is required from the runtime. Everything else is enabled if
-  the runtime lists it. There's no Pico or Meta code on that build.
-- The eye image is the runtime's recommended size (1728 square) times `vr_resolution_scale` (archived, default 1.25,
-  which is the panel's own 2160 square), held to what the view and the swapchain allow. The Quest build uses 1.3x of the
-  recommended size. The log has the recommended, the largest allowed and the size used.
-- `vr_refresh_rate` (archived, default 90) is the rate to ask for: the highest the runtime offers that isn't
-  over it, with the offered list, the request and the result in the log. SteamVR only offers an app the rate in
-  its per-app settings in the headset, so that's often the only one on the list. `vr_refresh`, which the game
-  uses to scale walking, follows the real frame period.
-- When the headset is in standby (`shouldRender` is false) the frame goes in with
-  no layers and the game doesn't simulate. Without that the server kept running.
-- If SteamVR quits the app the game shuts down the normal way.
-- The eye framebuffers use plain GLES 3 on the Frame, so the runtime's GL doesn't
-  need `EXT_multisampled_render_to_texture`. It's one swapchain per eye, there's
-  no multiview.
-- The HUD, game text and titles (the tram credits) stay level with the world when you tilt your head. They
-  were drawn into the eye image, so they rolled with your head. The HUD pass is turned the other way by the
-  roll the world is drawn with, about the middle of each eye's view, so it follows your head's turn and
-  nod but not its roll. The menus (a panel fixed in the world) and a scope are as they were.
-- Each eye is drawn from the eye pose the runtime gives (position, and rotation if the eye
-  has one, in head space), and each projection view goes in with that eye's own pose. The
-  Quest build moves each eye by a fixed 65 mm along the side and submits both views with
-  the head's pose. On my Frame the runtime says the eyes are at +-34.5 mm (68.9 mm apart,
-  that's the headset's IPD setting), with no rotation, so for the world the difference is small. The
-  fixed pose in the layer was the wrong thing to tell the compositor though.
-- The HUD sits `vr_hud_distance` metres in front of you (archived cvar, default 1.0). The
-  client DLL (a submodule I can't touch) shifts every HUD item by width / 36 per eye, which
-  came to about 0.4 m on the Frame and was hard to look at. While the HUD draws, the DLL is told
-  the eyes are the mono ones (it adds nothing then), and the HUD is shifted instead by the
-  pixels that put it at that distance, from that eye's real position and focal length. A
-  scope and the flat menu screen are left as they were.
-- The eye framebuffers are made through gl4es but their attachments are set with the
-  driver's own GL (`eglGetProcAddress`). The plain `gl*` names in `libxash.so` are gl4es's,
-  and it swaps a texture it doesn't know for an empty one of its own.
-- The engine's messages go to logcat under the tag `Xash`. They always did, but the developer
-  level defaulted to 0, so nothing came out. It's 3 on the Frame build; `-dev` in
-  `commandline.txt` still wins.
-- `vr_refresh` is taken from the frame period, not from the refresh rates the runtime lists.
-  SteamVR sets the rate per app, and it offered 90 Hz while the display ran at 72.
-- The log lines that start with `[openxr]` say what was picked: runtime, enabled
-  extensions, swapchain format and size, session state, which profiles got
-  bindings and what the runtime answered.
-- The all-files permission screen doesn't exist on the Frame. There the app
-  checks that it can write to the data folder and only asks if it can't.
-
-## Files I changed that the Quest build uses too
-
-- `Projects/Android/build.gradle`: the frame build type, the loader download,
-  `buildConfig` on (for `BuildConfig.STEAM_FRAME`)
-- `Projects/Android/gradlew` and `gradlew.bat`: the wrapper jar and properties
-  were there already, the scripts weren't
-- `Projects/AndroidPrebuilt/jni/Android.mk`: the Frame build says which loader
-  to link
-- `Projects/Android/jni/src/Xash3D/xash3d/engine/Android.mk`: `L1VR_STEAM_FRAME`,
-  and `-Wall` for the VR sources
-- `java/com/drbeef/lambda1vr/GLES3JNIActivity.java`: loader, data folder,
-  permission check
-- `TBXR_Common.c/.h`, `OpenXrInput.c`, `L1VR_SurfaceView.c`, `VrEyeMath.c/.h` (new),
-  `VrCvars.h`, `common/port.h`, and in the engine `gl_rmain.c`, `gl_draw.c`, `cl_game.c`,
-  `cl_scrn.c`: the Frame code, all behind `L1VR_STEAM_FRAME`
-- `#include <string.h>` in `TBXR_Common.c` and `OpenXrInput.c`, which `-Wall` asked for
-
-## The Quest build
-
-I built `assembleRelease` before and after these changes. The repo doesn't ship
-the Meta loader, so both builds used the Khronos one as a stand-in to link.
-
-This was done before the shutdown fix below, and the comparison wasn't redone after it.
-
-- Everything except `libxash.so` is byte for byte the same.
-- The `string.h` includes change how a few functions in `libxash.so` compile
-  (strcpy becomes the checked version, memset gets inlined differently).
-  Same behaviour.
-- With those two includes taken out of the Quest build too, the code,
-  read-only data, data, GOT, dynamic symbols and relocations of `libxash.so` are identical
-  to the old build. Only the debug info and the build id differ, because line
-  numbers moved.
-- The Quest APK gets a `BuildConfig` class in the dex, since Java checks it now.
-- One real change for Quest too: `jVM` in `L1VR_SurfaceView.c` was never set, so
-  `jni_shutdown` dereferenced NULL. The compiler drops everything after a call like
-  that, which made the quit path in `AppThreadFunction` run off the end of the function
-  (an abort on the Frame). `JNI_OnLoad` sets it now. I haven't built or run it on a Quest.
-
-## Checked and not checked
-
-Checked on the Frame, unattended (headset on a desk, nobody wearing it, started over adb):
-
-- the Khronos loader finds SteamVR 2.17.10, 1728x1728 swapchains, the Frame, Index and Touch
-  binding suggestions all come back `XR_SUCCESS`
-- the session goes through READY and SYNCHRONIZED, the frame loop holds 72 fps
-- the first level (`c1a0`) loads from the Steam Half-Life files and both eyes show it, with
-  a sensible difference between the eyes, turned 90 degrees too
-- the app quits cleanly when told to
-- the stereo, measured on the eye images with rays traced into the map: surfaces at 2.4 to
-  10 m land within 0.6 px of the interpupillary distance times the focal length over
-  the depth, a wall 58 m away shows 0.1 px where 0.7 is right, and the HUD at
-  `vr_hud_distance` 1 and 2 measured 41.0 and 21.0 px of disparity (41.4 and 20.7 expected)
-
-Checked on the Mac:
-
-- `assembleFrame` builds
-- the APK has the pinned Khronos loader and the game libraries, arm64 only
-- `aapt2 dump badging` says minSdk 30, no headtracking feature, no Quest or
-  Pico metadata, package `com.drbeef.lambda1vr.frame`
-- the Quest release build is as described above
-
-Not checked yet:
-
-- anything with a person in the headset: how it looks and feels, scale, the HUD,
-  controllers, performance, quitting from the SteamVR menu
-- starting it from the Steam library (so far only over adb)
-- the replacement weapon and hand models: the repo's `assets` don't have the `.mdl`
-  files (they're git-ignored), so the engine logs that it can't load `v_hand.mdl` and
-  friends
-- that the Frame controller paths are accepted by the runtime (the log lines say)
-- the recentre buttons
-- Pico: nothing there changed as far as I can tell, but I can't build or run it
+In six recorded runs on two saves, with the Frame display in standby, the game held 120 fps at 120 Hz and
+2160x2160 per eye with no missed frames. The game thread used about 3.1 ms of the 8.33 ms frame period. The
+Adreno ran at 903 MHz and was about 60% busy at 1728 pixels per eye and fully busy at 2160. One run each on a
+busy save also recorded 120 fps at 2592 and 3024 pixels per eye.
