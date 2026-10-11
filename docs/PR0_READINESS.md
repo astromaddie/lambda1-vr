@@ -1,21 +1,19 @@
-# PR0 — lambda1-vr
+# PR0 — Lambda1VR on Steam Frame
 
-**EXPERIMENTAL.** Kept private while the items below are resolved. See the [README](../README.md) for the port's features, controls, game-data requirements and build instructions.
-
-| Record | Revision |
-| --- | --- |
-| Hygiene audit | `f3773cb04d004a8d51ae095f0fac8c383d6bbafc` |
-| Checkout when this record was updated | `f3773cb04d004a8d51ae095f0fac8c383d6bbafc` |
-| Build/test source | No fresh full-build SHA recorded in this audit. |
+**EXPERIMENTAL.** Source release of the Steam Frame fork of [Team Beef's Lambda1VR](https://github.com/Team-Beef-Studios/Lambda1VR). See the [README](../README.md) for features, controls, required game data and build instructions.
 
 Target: Steam Frame / Lepton Android 11 / ARM64 / SteamVR OpenXR / GLES 3.2.
 
-No fresh build or tests were run for the audited source. Existing .DS_Store files were preserved and excluded. No new full application build is claimed for this audit.
+| Record | Revision |
+| --- | --- |
+| Earlier hygiene audit | `f3773cb04d004a8d51ae095f0fac8c383d6bbafc` |
+| Host-tested source | `b5f1779386801d997cb1afef02bff875d80d61db` |
+| Public upstream release lineage | Team Beef v1.7.4 at `99a0d62` |
 
-The publication blockers are:
+`bash tools/steam_frame/tests/run_tests.sh` passed: bindings, LAN host options, diagnostics/BMP, eye and pointer math, controller mapping and deploy lock safety. No fresh full APK build was run for this publication update.
 
-- Reachable history includes machine local.properties and assets/extras.pak whose provenance needs review. The shared Android debug key is build material rather than a confirmed private production key. GPLv3 engine terms and Half-Life SDK free-distribution terms need a documented compatibility or permission route.
+The root GPLv3 and engine/SDK notices are retained. `assets/extras.pak` matches inherited Team Beef source, and the shared Android debug key is development build material. Machine-specific `local.properties` files are removed from the tracked tip and ignored; the old upstream configuration remains in history.
 
-A user-provided Half-Life installation is required. Half-Life: Source is incompatible. Keep the original upstream and component notices; they do not grant rights to the commercial game.
+Supply the retail Half-Life files from your own copy. Half-Life: Source is incompatible. The source license does not grant redistribution rights to the commercial game. No APK or game-data package is published here.
 
 [Exact metadata](PR0_METADATA.json) · [Changelog](../CHANGELOG.md)

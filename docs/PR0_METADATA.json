@@ -2,24 +2,30 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "private preparation; no release published",
+  "publication_status": "prepared for public experimental source; no binary release",
   "audited_commit": "f3773cb04d004a8d51ae095f0fac8c383d6bbafc",
-  "current_checkout_commit": "f3773cb04d004a8d51ae095f0fac8c383d6bbafc",
+  "current_checkout_commit": "b5f1779386801d997cb1afef02bff875d80d61db",
   "branch": "frame-dev",
-  "tested_commit": null,
+  "tested_commit": "b5f1779386801d997cb1afef02bff875d80d61db",
   "supported_targets": [
     "Steam Frame / Lepton Android 11 / ARM64 / SteamVR OpenXR / GLES 3.2"
   ],
   "validation": {
-    "source_commit": null,
-    "result": "No fresh build or tests were run for the audited source. Existing .DS_Store files were preserved and excluded."
+    "source_commit": "b5f1779386801d997cb1afef02bff875d80d61db",
+    "commands": [
+      "bash tools/steam_frame/tests/run_tests.sh"
+    ],
+    "result": "PASS: three binding profiles and 34 actions, LAN host options, diagnostics/BMP, eye math, pointer math, frame mapping and deploy lock safety. No device install or launch."
   },
   "full_application_build": "not run for current audited source",
-  "distribution_blockers": [
-    "Reachable history includes machine local.properties and assets/extras.pak whose provenance needs review. The shared Android debug key is build material rather than a confirmed private production key. GPLv3 engine terms and Half-Life SDK free-distribution terms need a documented compatibility or permission route."
-  ],
+  "distribution_blockers": [],
   "data_boundary": "A user-provided Half-Life installation is required. Half-Life: Source is incompatible.",
   "changelog": "CHANGELOG.md",
   "audit_date": "2026-10-11",
-  "audit_details": "docs/PR0_READINESS.md"
+  "audit_details": "docs/PR0_READINESS.md",
+  "distribution_notes": [
+    "Root GPLv3 and original engine/SDK notices retained. Retail Half-Life data is supplied separately by the user.",
+    "assets/extras.pak is unchanged inherited Team Beef material, present in the public v1.7.4 source lineage at 99a0d62. The shared Android debug key is development build material.",
+    "Machine-specific local.properties files are removed from the tracked tip and ignored; historical upstream configuration remains in Git history."
+  ]
 }

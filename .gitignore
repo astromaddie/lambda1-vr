@@ -78,3 +78,6 @@ tools/steam_frame/.venv/
 
 # Frame dev: run output from deploy.sh
 scratchpad/
+
+# Local Android SDK configuration
+/local.properties
