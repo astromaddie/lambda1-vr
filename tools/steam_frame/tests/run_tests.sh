@@ -5,11 +5,17 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../../.." && pwd)"
 vr="$root/Projects/Android/jni/src/Lambda1VR"
+menu="$root/Projects/Android/jni/src/Xash3D/xash3d/mainui/menus"
 out="$(mktemp -d)"
 trap 'rm -rf "$out"' EXIT
 
 # binding tables and action names against the profiles' component lists
 python3 "$here/check_bindings.py"
+
+# LAN listen servers must always have room for the host and one remote player.
+cxx="${CXX:-clang++}"
+"$cxx" -std=c++11 -Wall -Wextra -Werror -I"$menu" "$here/test_host_game_options.cpp" -o "$out/test_host_game_options"
+"$out/test_host_game_options"
 
 # vr-diag.ini parser and the BMP writer
 cc="${CC:-clang}"

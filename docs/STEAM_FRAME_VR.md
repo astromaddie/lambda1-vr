@@ -77,6 +77,24 @@ PC's Steam copy to `~/Documents/Lambda1VR/valve`. A copy there is used too when 
 found first, so a stale copy would be used over the Steam files). The log says which one it picked, with a
 `[data]` line.
 
+## Quest and Frame LAN multiplayer
+
+Use compatible Lambda1VR builds from the same source revision, with matching Half-Life game data, and put
+both headsets on the same local network. The LAN browser uses local UDP discovery and direct connections;
+it does not need an Internet server, NAT bypass, or an IP address typed on-head. A guest Wi-Fi network with
+client isolation can block discovery and direct play.
+
+On the host, open **Multiplayer > LAN game > Create game**, choose a map, then select **Ok**. The player
+count starts at 2 so the listen server has a slot for its local player and one joining player. The headset
+that starts the map is player 1. On the other headset, open **Multiplayer > LAN game**, select the host in
+the server list, and choose **Join game**. Use **Refresh** if the host does not appear.
+
+Keep a Frame host active during play. In the Frame build, headset standby (`shouldRender=false`) currently
+skips the engine frame, including the LAN server tick. A joining client can remain connected if the host
+resumes within its 60-second `cl_timeout`; after that the client reports a timeout and must rejoin from the
+LAN list. The server frees a silent client after its 125-second `sv_timeout` when ticking resumes. The Quest
+build continues its engine frame while not rendering, so its current standby behavior differs.
+
 ## Controls
 
 The Frame's controllers are a split gamepad. Left has the stick, trigger, grip, bumper, D-pad and

@@ -179,9 +179,9 @@ android {
             }
         }
 
-        // Valve Steam Frame (Lepton, Android 11). Same as release, plus the
-        // Khronos OpenXR loader, a manifest overlay (src/frame) and L1VR_STEAM_FRAME
-        // for the native code. Signed with the debug key, it's only sideloaded.
+        // Valve Steam Frame (Lepton, Android 11). Same as release, plus a
+        // manifest overlay (src/frame) and L1VR_STEAM_FRAME for the native code.
+        // Signed with the debug key, it's only sideloaded.
         frame {
             initWith release
             matchingFallbacks = ['release']
@@ -192,7 +192,7 @@ android {
 
             externalNativeBuild {
                 ndkBuild {
-                    arguments "L1VR_STEAM_FRAME=1", "L1VR_OPENXR_LOADER=${khronosLoaderSo.absolutePath}", "APP_PLATFORM=android-30"
+                    arguments "L1VR_STEAM_FRAME=1", "APP_PLATFORM=android-30"
                 }
             }
         }
@@ -240,7 +240,7 @@ androidComponents {
 
 // The loader has to be there before ndk-build links against it
 tasks.configureEach { task ->
-    if (task.name == 'preFrameBuild') {
+    if (task.name in ['preBuild', 'preDebugBuild', 'preReleaseBuild', 'preFrameBuild']) {
         task.dependsOn fetchKhronosLoader
     }
     if (task.name == 'mergeFrameAssets') {

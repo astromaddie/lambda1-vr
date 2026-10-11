@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "Table.h"
 #include "Action.h"
 #include "YesNoMessageBox.h"
+#include "HostGameOptions.h"
 #include "Table.h"
 
 #define ART_BANNER		"gfx/shell/head_creategame"
@@ -82,6 +83,17 @@ private:
 	void _VidInit() override;
 };
 
+static void NormalizeMaxClientsField( CMenuField *field, bool preserveEmpty )
+{
+	const char *value = field->GetBuffer();
+	if( preserveEmpty && !value[0] )
+		return;
+
+	char normalized[4];
+	snprintf( normalized, sizeof( normalized ), "%d", HostGame_NormalizeMaxPlayers( atoi( value ) ));
+	field->SetBuffer( normalized );
+}
+
 static CMenuCreateGame	uiCreateGame;
 
 /*
@@ -124,7 +136,9 @@ void CMenuCreateGame::Begin( CMenuBaseItem *pSelf, void *pExtra )
 	menu->password.WriteCvar();
 	menu->hostName.WriteCvar();
 	menu->hltv.WriteCvar();
+	NormalizeMaxClientsField( &menu->maxClients, false );
 	menu->maxClients.WriteCvar();
+	const int maxPlayers = HostGame_NormalizeMaxPlayers( atoi( menu->maxClients.GetBuffer() ));
 
 	EngFuncs::PlayBackgroundTrack( NULL, NULL );
 
@@ -150,12 +164,12 @@ void CMenuCreateGame::Begin( CMenuBaseItem *pSelf, void *pExtra )
 		EngFuncs::ClientCmd( TRUE, cmd );
 
 		// dirty listenserver config form old xash may rewrite maxplayers
-		EngFuncs::CvarSetValue( "maxplayers", atoi( menu->maxClients.GetBuffer() ));
+		EngFuncs::CvarSetValue( "maxplayers", maxPlayers );
 
 		Com_EscapeCommand( cmd2, mapName, 256 );
 
 		// hack: wait three frames allowing server to completely shutdown, reapply maxplayers and start new map
-		sprintf( cmd, "endgame;menu_connectionprogress localserver;wait;wait;wait;maxplayers %i;latch;map %s\n", atoi( menu->maxClients.GetBuffer() ), cmd2 );
+		sprintf( cmd, "endgame;menu_connectionprogress localserver;wait;wait;wait;maxplayers %i;latch;map %s\n", maxPlayers, cmd2 );
 		EngFuncs::ClientCmd( FALSE, cmd );
 
 	}
@@ -248,26 +262,17 @@ void CMenuCreateGame::_Init( void )
 	maxClients.bNumbersOnly = true;
 	maxClients.szName = "Max Players:";
 	maxClients.LinkCvar( "maxplayers" );
+	NormalizeMaxClientsField( &maxClients, false );
 	SET_EVENT_MULTI( maxClients.onCvarChange,
 	{
 		CMenuField *self = (CMenuField*)pSelf;
-		if( !self->GetBuffer()[0] )
-			return;
-		int players = atoi( self->GetBuffer() );
-		if( players <= 1 )
-			self->SetBuffer( "2" );
-		else if( players > 32 )
-			self->SetBuffer( "32" );
+		NormalizeMaxClientsField( self, true );
 	});
 
 	SET_EVENT_MULTI( maxClients.onLostFocus,
 	{
 		CMenuField *self = (CMenuField*)pSelf;
-		int players = atoi( self->GetBuffer() );
-		if( players <= 1 )
-			self->SetBuffer( "2" );
-		else if( players > 32 )
-			self->SetBuffer( "32" );
+		NormalizeMaxClientsField( self, false );
 	});
 
 	password.szName = "Password:";
