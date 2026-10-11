@@ -2,7 +2,7 @@
   "schema_version": 1,
   "milestone": "PR0",
   "status": "EXPERIMENTAL",
-  "publication_status": "prepared for public experimental source; no binary release",
+  "publication_status": "public experimental source; no binary release",
   "audited_commit": "f3773cb04d004a8d51ae095f0fac8c383d6bbafc",
   "current_checkout_commit": "b5f1779386801d997cb1afef02bff875d80d61db",
   "branch": "frame-dev",
@@ -27,5 +27,6 @@
     "Root GPLv3 and original engine/SDK notices retained. Retail Half-Life data is supplied separately by the user.",
     "assets/extras.pak is unchanged inherited Team Beef material, present in the public v1.7.4 source lineage at 99a0d62. The shared Android debug key is development build material.",
     "Machine-specific local.properties files are removed from the tracked tip and ignored; historical upstream configuration remains in Git history."
-  ]
+  ],
+  "publication_date": "2026-10-11"
 }
